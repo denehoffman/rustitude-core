@@ -2153,7 +2153,7 @@ dependencies = [
 
 [[package]]
 name = "rustitude"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "approx 0.5.1",
  "nalgebra 0.32.3",
