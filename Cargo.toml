@@ -2,6 +2,13 @@
 name = "rustitude"
 version = "0.1.0"
 edition = "2021"
+authors = ["Nathaniel Dene Hoffman <dene@cmu.edu>"]
+description = "A library to create and operate models for particle physics amplitude analyses"
+repository = "https://github.com/denehoffman/rustitude/"
+homepage = "https://github.com/denehoffman/rustitude/"
+license = "BSD-3-Clause"
+readme = "README.md"
+exclude = ["convert", "data.*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -9,10 +16,18 @@ edition = "2021"
 approx = { version = "0.5.1", features = ["num-complex"] }
 nalgebra = "0.32.3"
 ndarray = "0.15.6"
-ndarray-linalg = { version = "0.16.0", features = ["openblas-static"] }
+ndarray-linalg = "0.16.0"
 nshare = { version = "0.9.0", features = ["nalgebra", "ndarray"] }
 num = "0.4.1"
 num-complex = "0.4.4"
 polars = { version = "0.34.2", features = ["parquet", "describe"] }
 rayon = "1.8.0"
 sphrs = "0.2.2"
+
+[features]
+openblas-static = ["ndarray-linalg/openblas-static"]
+openblas-system = ["ndarray-linalg/openblas-system"]
+netlib-static = ["ndarray-linalg/netlib-static"]
+netlib-system = ["ndarray-linalg/netlib-system"]
+intel-mkl-static = ["ndarray-linalg/intel-mkl-static"]
+intel-mkl-system = ["ndarray-linalg/intel-mkl-system"]
