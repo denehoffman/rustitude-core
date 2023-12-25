@@ -450,7 +450,7 @@ impl AmplitudeBuilder for FrozenKMatrix {
             let s = resonance_p4_lab.m2();
             let ikc_inv_vec = vars[&*var_name].cvector()?;
             let betas = Array1::from_shape_fn(self.n_resonances, |i| {
-                pars[&format!("beta_{}", i)].cscalar().unwrap()
+                pars[&format!("beta_{}", i)].unwrap_c_scalar().value()
             });
 
             let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {

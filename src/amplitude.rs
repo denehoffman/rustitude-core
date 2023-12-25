@@ -1,3 +1,6 @@
+use derive_more::IsVariant;
+use derive_more::Unwrap;
+use derive_new::new;
 use rayon::prelude::*;
 use std::collections::HashSet;
 use std::ops::{Add, Div, Mul, Neg, Sub};
@@ -19,17 +22,17 @@ macro_rules! par {
 macro_rules! cpar {
     ($name:expr, $value_re:expr, $value_im:expr) => {
         ParameterType::CScalar(ComplexParameter {
-            name: $name.to_string(),
-            a: Parameter::new(format!("{} (re)", $name), $value_re),
-            b: Parameter::new(format!("{} (im)", $name), $value_im),
+            name: $name,
+            a: $value_re,
+            b: $value_im,
             coordinates: Coordinates::Cartesian,
         })
     };
     ($name:expr, $value_re:expr, $value_im:expr, Polar) => {
         ParameterType::CScalar(ComplexParameter {
             name: $name.to_string(),
-            a: Parameter::new(format!("{} (r)", $name), $value_re),
-            b: Parameter::new(format!("{} (theta)", $name), $value_im),
+            a: $value_re,
+            b: $value_im,
             coordinates: Coordinates::Polar,
         })
     };
@@ -88,7 +91,7 @@ enum Operation {
     Imag(Amplitude),
 }
 
-pub type ParMap = HashMap<String, ParameterType>;
+pub type ParMap<'a> = HashMap<String, ParameterType<'a>>;
 pub type VarMap = HashMap<String, FieldType>;
 pub type SendableAmpFn =
     dyn Fn(&ParMap, &VarMap) -> Result<Complex64, Box<dyn Error + Send + Sync>> + Send + Sync;
@@ -162,8 +165,8 @@ impl Amplitude {
         }
         self
     }
-    pub fn link(self, external_name: String, internal_name: String) -> Self {
-        self.map(external_name, internal_name)
+    pub fn link(self, external_name: &str, internal_name: &str) -> Self {
+        self.map(external_name.to_string(), internal_name.to_string())
     }
 
     fn _evaluate(
@@ -245,16 +248,17 @@ impl Amplitude {
             }
         }
     }
-    pub fn evaluate_on(&self, pars: &[&ParameterType], dataset: &Dataset) -> Vec<Complex64> {
+    pub fn evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
-            .map(|&param| {
+            .map(|param| {
                 (
                     match &param {
-                        ParameterType::Scalar(par) => par.name.clone(),
-                        ParameterType::CScalar(par) => par.name.clone(),
-                    },
-                    param.clone(),
+                        ParameterType::Scalar(par) => par.name,
+                        ParameterType::CScalar(par) => par.name,
+                    }
+                    .to_string(),
+                    *param,
                 )
             })
             .collect();
@@ -270,15 +274,16 @@ impl Amplitude {
         output
     }
 
-    pub fn par_evaluate_on(&self, pars: &[&ParameterType], dataset: &Dataset) -> Vec<Complex64> {
+    pub fn par_evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
-            .map(|&param| {
+            .map(|param| {
                 (
                     match &param {
-                        ParameterType::Scalar(par) => par.name.clone(),
-                        ParameterType::CScalar(par) => par.name.clone(),
-                    },
+                        ParameterType::Scalar(par) => par.name,
+                        ParameterType::CScalar(par) => par.name,
+                    }
+                    .to_string(),
                     param.clone(),
                 )
             })
@@ -577,11 +582,11 @@ pub trait AmplitudeBuilder {
     {
         if let Some(internal_names) = self.internal_parameter_names() {
             println!("Parnames {:?}", internal_names);
-            let external_names: Vec<&String> = parameters
+            let external_names: Vec<&str> = parameters
                 .iter()
                 .map(|par_type| match par_type {
-                    ParameterType::Scalar(par) => &par.name,
-                    ParameterType::CScalar(par) => &par.name,
+                    ParameterType::Scalar(par) => par.name,
+                    ParameterType::CScalar(par) => par.name,
                 })
                 .collect();
             internal_names.iter().zip(external_names.iter()).fold(
@@ -594,115 +599,112 @@ pub trait AmplitudeBuilder {
     }
 }
 
-#[derive(Clone)]
-pub enum ParameterType {
-    Scalar(Parameter),
-    CScalar(ComplexParameter),
+#[derive(Clone, Unwrap, Copy, IsVariant)]
+pub enum ParameterType<'a> {
+    Scalar(Parameter<'a>),
+    CScalar(ComplexParameter<'a>),
 }
 
-impl ParameterType {
-    pub fn scalar(&self) -> Result<f64, &str> {
-        if let Self::Scalar(par) = self {
-            Ok(par.value())
-        } else {
-            Err("Could not convert to Scalar type")
-        }
-    }
-    pub fn cscalar(&self) -> Result<Complex64, &str> {
-        if let Self::CScalar(par) = self {
-            Ok(par.value())
-        } else {
-            Err("Could not convert to CScalar type")
-        }
+impl<'a> From<Parameter<'a>> for ParameterType<'a> {
+    fn from(par: Parameter<'a>) -> Self {
+        ParameterType::Scalar(par)
     }
 }
 
-impl From<Parameter> for ParameterType {
-    fn from(value: Parameter) -> Self {
-        ParameterType::Scalar(value)
+impl<'a> From<ComplexParameter<'a>> for ParameterType<'a> {
+    fn from(par: ComplexParameter<'a>) -> Self {
+        ParameterType::CScalar(par)
     }
 }
 
-impl From<ComplexParameter> for ParameterType {
-    fn from(value: ComplexParameter) -> Self {
-        ParameterType::CScalar(value)
-    }
-}
-
-#[derive(Clone)]
-pub struct Parameter {
-    name: String,
+#[derive(Clone, Copy, new)]
+pub struct Parameter<'a> {
+    name: &'a str,
     pub value: f64,
+    #[new(default)]
     lower_bound: Option<f64>,
+    #[new(default)]
     upper_bound: Option<f64>,
+    #[new(value = "false")]
     fixed: bool,
 }
 
-impl Parameter {
+impl<'a> From<Parameter<'a>> for f64 {
+    fn from(par: Parameter) -> Self {
+        par.value()
+    }
+}
+impl<'a> From<Parameter<'a>> for Complex64 {
+    fn from(par: Parameter) -> Self {
+        par.value().into()
+    }
+}
+
+impl<'a> Parameter<'a> {
     pub fn value(&self) -> f64 {
         self.value
     }
 
-    pub fn new(name: String, value: f64) -> Parameter {
-        Parameter {
-            name,
-            value,
-            lower_bound: None,
-            upper_bound: None,
-            fixed: false,
-        }
-    }
-    pub fn with_bounds(mut self, lower_bound: Option<f64>, upper_bound: Option<f64>) -> Parameter {
+    pub fn with_bounds(
+        mut self,
+        lower_bound: Option<f64>,
+        upper_bound: Option<f64>,
+    ) -> Parameter<'a> {
         self.lower_bound = lower_bound;
         self.upper_bound = upper_bound;
         self
     }
-    pub fn fix(mut self) -> Parameter {
+    pub fn fix(mut self) -> Parameter<'a> {
         self.fixed = true;
         self
     }
-    pub fn free(mut self) -> Parameter {
+    pub fn free(mut self) -> Parameter<'a> {
         self.fixed = false;
         self
     }
     pub fn as_amp(&self) -> Amplitude {
-        Amplitude::new(self.name.clone(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].scalar()?.into())
+        Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
+            Ok(pars["parameter"].unwrap_scalar().into())
         })
         .with_pars(vec!["parameter".to_string()])
-        .link(self.name.clone(), "parameter".to_string())
+        .link(self.name, "parameter")
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub enum Coordinates {
     Cartesian,
     Polar,
 }
 
-#[derive(Clone)]
-pub struct ComplexParameter {
-    pub name: String,
-    pub a: Parameter,
-    pub b: Parameter,
+#[derive(Clone, Copy)]
+pub struct ComplexParameter<'a> {
+    pub name: &'a str,
+    pub a: f64,
+    pub b: f64,
     pub coordinates: Coordinates,
 }
 
-impl ComplexParameter {
+impl<'a> From<ComplexParameter<'a>> for Complex64 {
+    fn from(par: ComplexParameter) -> Self {
+        par.value()
+    }
+}
+
+impl<'a> ComplexParameter<'a> {
     pub fn value(&self) -> Complex64 {
         match self.coordinates {
-            Coordinates::Cartesian => Complex64::new(self.a.value(), self.b.value()),
-            Coordinates::Polar => Complex64::from_polar(self.a.value(), self.b.value()),
+            Coordinates::Cartesian => Complex64::new(self.a, self.b),
+            Coordinates::Polar => Complex64::from_polar(self.a, self.b),
         }
     }
 
     pub fn as_amp(&self) -> Amplitude {
-        let name = self.name.clone();
-        Amplitude::new(name.clone(), move |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars[&name].cscalar()?)
+        Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
+            Ok(pars["parameter"].unwrap_c_scalar().into())
         })
         .with_pars(vec!["parameter".to_string()])
-        .link(self.name.clone(), "parameter".to_string())
+        .link(self.name, "parameter")
     }
 }
 

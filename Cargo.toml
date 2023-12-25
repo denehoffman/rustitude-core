@@ -14,20 +14,30 @@ exclude = ["convert", "data.*"]
 
 [dependencies]
 approx = { version = "0.5.1", features = ["num-complex"] }
+argmin = "0.8.1"
+argmin-math = "0.3.0"
 nalgebra = "0.32.3"
 ndarray = "0.15.6"
 ndarray-linalg = "0.16.0"
-nshare = { version = "0.9.0", features = ["nalgebra", "ndarray"] }
 num = "0.4.1"
 num-complex = "0.4.4"
-polars = { version = "0.34.2", features = ["parquet", "describe"] }
+polars = { version = "0.35.4", features = ["parquet", "describe"] }
 rayon = "1.8.0"
 sphrs = "0.2.2"
+thiserror = "1.0.51"
+derive_more = { version = "0.99.17", default_features = false, features = [
+  "is_variant",
+  "unwrap",
+  "display",
+] }
+derive-new = "0.6.0"
 
 [features]
-openblas-static = ["ndarray-linalg/openblas-static"]
-openblas-system = ["ndarray-linalg/openblas-system"]
-netlib-static = ["ndarray-linalg/netlib-static"]
-netlib-system = ["ndarray-linalg/netlib-system"]
-intel-mkl-static = ["ndarray-linalg/intel-mkl-static"]
-intel-mkl-system = ["ndarray-linalg/intel-mkl-system"]
+default = []
+blas = ["ndarray/blas"]
+openblas-static = ["blas", "ndarray-linalg/openblas-static"]
+openblas-system = ["blas", "ndarray-linalg/openblas-system"]
+netlib-static = ["blas", "ndarray-linalg/netlib-static"]
+netlib-system = ["blas", "ndarray-linalg/netlib-system"]
+intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
+intel-mkl-system = ["blas", "ndarray-linalg/intel-mkl-system"]
