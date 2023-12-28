@@ -3,7 +3,6 @@ use std::time::Instant;
 use ndarray::array;
 use num_complex::Complex64;
 use rustitude::gluex;
-use rustitude::gluex::AdlerZero;
 use rustitude::prelude::*;
 
 fn main() {

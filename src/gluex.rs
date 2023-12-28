@@ -283,9 +283,130 @@ impl AmplitudeBuilder for Zlm {
         let zlm_var = self.to_variable();
         let var_name = zlm_var.name.to_string();
         Amplitude::new(var_name.clone(), move |_pars: &ParMap, vars: &VarMap| {
-            Ok(*(vars[&*var_name].cscalar()?))
+            Ok(*(vars[&*var_name].cscalar()))
         })
         .with_deps(vec![zlm_var.clone()])
+    }
+}
+
+#[derive(Clone)]
+pub struct Mass {
+    name: String,
+    particle_info: ParticleInfo,
+}
+impl VariableBuilder for Mass {
+    fn to_variable(self) -> Variable {
+        Variable::new(
+            self.name,
+            move |vars: &VarMap| {
+                let fs_p4s_lab = vars["Final State P4"].momenta();
+                let resonance_p4_lab: &FourMomentum = &self
+                    .particle_info
+                    .resonance_indices
+                    .iter()
+                    .map(|i| &fs_p4s_lab[*i])
+                    .sum();
+                FieldType::Scalar(resonance_p4_lab.m())
+            },
+            None,
+        )
+    }
+}
+
+#[derive(Clone)]
+pub struct BarrierFactor {
+    name: String,
+    m: Array1<f64>,
+    m1: Array1<f64>,
+    m2: Array1<f64>,
+    l: usize,
+    n_resonances: usize,
+    n_channels: usize,
+    particle_info: ParticleInfo,
+    mass: Variable,
+}
+
+impl BarrierFactor {
+    fn new(
+        name: String,
+        m: Array1<f64>,
+        m1: Array1<f64>,
+        m2: Array1<f64>,
+        l: usize,
+        particle_info: ParticleInfo,
+    ) -> BarrierFactor {
+        let n_resonances = m.len();
+        let n_channels = m1.len();
+        let mass_name = format!("{}_mass", name.clone());
+        let mass = Mass {
+            name: mass_name.clone(),
+            particle_info: particle_info.clone(),
+        }
+        .to_variable();
+        BarrierFactor {
+            name,
+            m,
+            m1,
+            m2,
+            l,
+            n_resonances,
+            n_channels,
+            particle_info,
+            mass,
+        }
+    }
+}
+
+impl BarrierFactor {
+    fn chi_plus(&self, s: f64, channel: usize) -> Complex64 {
+        (1.0 - ((&self.m1 + &self.m2) * (&self.m1 + &self.m2))[channel] / s).into()
+    }
+
+    fn chi_minus(&self, s: f64, channel: usize) -> Complex64 {
+        (1.0 - ((&self.m1 - &self.m2) * (&self.m1 - &self.m2))[channel] / s).into()
+    }
+
+    fn rho(&self, s: f64, channel: usize) -> Complex64 {
+        (self.chi_plus(s, channel) * self.chi_minus(s, channel)).sqrt()
+    }
+    fn z(&self, s: f64, channel: usize) -> Complex64 {
+        let q = self.rho(s, channel) * Complex64::sqrt(s.into()) / 2.0;
+        q * q / (0.1973 * 0.1973)
+    }
+    fn blatt_weisskopf(&self, s: f64, channel: usize) -> Complex64 {
+        let z = self.z(s, channel);
+        match self.l {
+            0 => 1.0.into(),
+            1 => ((2.0 * z) / (z + 1.0)).sqrt(),
+            2 => ((13.0 * z.powi(2)) / ((z - 3.0).powi(2) + 9.0 * z)).sqrt(),
+            3 => ((277.0 * z.powi(3)) / (z * (z - 15.0).powi(2) + 9.0 * (2.0 * z - 5.0).powi(2)))
+                .sqrt(),
+            4 => ((12746.0 * z.powi(4)) / (z.powi(2) - 45.0 * z + 105.0).powi(2)
+                + 25.0 * z * (2.0 * z - 21.0).powi(2))
+            .sqrt(),
+            l => panic!("L = {} is not yet implemented", l),
+        }
+    }
+    fn barrier_factor(&self, s: f64, channel: usize, resonance: usize) -> Complex64 {
+        let numerator = self.blatt_weisskopf(s, channel);
+        let denominator = self.blatt_weisskopf(self.m[resonance].powi(2), channel);
+        numerator / denominator
+    }
+}
+impl VariableBuilder for BarrierFactor {
+    fn to_variable(self) -> Variable {
+        let mass_name = self.mass.name;
+        Variable::new(
+            self.name.clone(),
+            move |entry: &VarMap| {
+                let s = entry[&*mass_name].scalar().powi(2);
+                FieldType::CMatrix(Array2::from_shape_fn(
+                    (self.n_channels, self.n_resonances),
+                    |(i, a)| self.barrier_factor(s, i, a),
+                ))
+            },
+            Some(vec![self.mass]),
+        )
     }
 }
 
@@ -345,12 +466,15 @@ impl FrozenKMatrix {
     fn chi_plus(&self, s: f64, channel: usize) -> Complex64 {
         (1.0 - ((&self.m1 + &self.m2) * (&self.m1 + &self.m2))[channel] / s).into()
     }
+
     fn chi_minus(&self, s: f64, channel: usize) -> Complex64 {
         (1.0 - ((&self.m1 - &self.m2) * (&self.m1 - &self.m2))[channel] / s).into()
     }
+
     fn rho(&self, s: f64, channel: usize) -> Complex64 {
         (self.chi_plus(s, channel) * self.chi_minus(s, channel)).sqrt()
     }
+
     fn c_matrix(&self, s: f64) -> Array2<Complex64> {
         Array2::from_diag(&Array1::from_shape_fn(self.n_channels, |channel| {
             self.rho(s, channel) / PI
@@ -362,67 +486,56 @@ impl FrozenKMatrix {
                     * Complex64::from((&self.m2 / &self.m1)[channel]).ln()
         }))
     }
-    fn z(&self, s: f64, channel: usize) -> Complex64 {
-        let q = self.rho(s, channel) * Complex64::sqrt(s.into()) / 2.0;
-        q * q / (0.1973 * 0.1973)
-    }
-    fn blatt_weisskopf(&self, s: f64, channel: usize) -> Complex64 {
-        let z = self.z(s, channel);
-        match self.l {
-            0 => 1.0.into(),
-            1 => ((2.0 * z) / (z + 1.0)).sqrt(),
-            2 => ((13.0 * z.powi(2)) / ((z - 3.0).powi(2) + 9.0 * z)).sqrt(),
-            3 => ((277.0 * z.powi(3)) / (z * (z - 15.0).powi(2) + 9.0 * (2.0 * z - 5.0).powi(2)))
-                .sqrt(),
-            4 => ((12746.0 * z.powi(4)) / (z.powi(2) - 45.0 * z + 105.0).powi(2)
-                + 25.0 * z * (2.0 * z - 21.0).powi(2))
-            .sqrt(),
-            l => panic!("L = {} is not yet implemented", l),
-        }
-    }
-    fn barrier_factor(&self, s: f64, channel: usize, resonance: usize) -> Complex64 {
-        let numerator = self.blatt_weisskopf(s, channel);
-        let denominator = self.blatt_weisskopf(self.m[resonance].powi(2), channel);
-        numerator / denominator
-    }
-    fn k_matrix(&self, s: f64) -> Array2<Complex64> {
-        let k_ija = Array3::from_shape_fn(
-            (self.n_channels, self.n_channels, self.n_resonances),
-            |(i, j, a)| {
-                self.barrier_factor(s, i, a)
-                    * ((self.g[[i, a]] * self.g[[j, a]]) / (self.m[a].powi(2) - s) + self.c[[i, j]])
-                    * self.barrier_factor(s, j, a)
-            },
-        );
-        match self.adler_zero {
-            Some(AdlerZero { s_0, s_norm }) => {
-                Complex64::from((s - s_0) / s_norm) * k_ija.sum_axis(Axis(2))
-            }
-            None => k_ija.sum_axis(Axis(2)),
-        }
-    }
 }
+
 impl VariableBuilder for FrozenKMatrix {
     fn to_variable(self) -> Variable {
+        let mass_name = format!("{}_mass", self.name.clone());
+        let mass = Mass {
+            name: mass_name.clone(),
+            particle_info: self.particle_info.clone(),
+        }
+        .to_variable();
+        let bf_name = format!("{}_bf", self.name.clone());
+        let barrier_factor = BarrierFactor {
+            name: bf_name.clone(),
+            m: self.m.clone(),
+            m1: self.m1.clone(),
+            m2: self.m2.clone(),
+            l: self.l,
+            n_resonances: self.n_resonances,
+            n_channels: self.n_channels,
+            particle_info: self.particle_info.clone(),
+        }
+        .to_variable();
+
         Variable::new(
             self.name.clone(),
             move |entry: &VarMap| {
-                let fs_p4s_lab = entry["Final State P4"].momenta().unwrap();
-                let resonance_p4_lab: &FourMomentum = &self
-                    .particle_info
-                    .resonance_indices
-                    .iter()
-                    .map(|i| &fs_p4s_lab[*i])
-                    .sum();
-                let s = resonance_p4_lab.m2();
-                let k_mat = self.k_matrix(s);
+                let s = entry[&mass_name].scalar().powi(2);
+                let bf = entry[&bf_name].cmatrix();
+                let k_ija = Array3::from_shape_fn(
+                    (self.n_channels, self.n_channels, self.n_resonances),
+                    |(i, j, a)| {
+                        bf[[i, a]]
+                            * ((self.g[[i, a]] * self.g[[j, a]]) / (self.m[a].powi(2) - s)
+                                + self.c[[i, j]])
+                            * bf[[j, a]]
+                    },
+                );
+                let k_mat = match self.adler_zero {
+                    Some(AdlerZero { s_0, s_norm }) => {
+                        Complex64::from((s - s_0) / s_norm) * k_ija.sum_axis(Axis(2))
+                    }
+                    None => k_ija.sum_axis(Axis(2)),
+                };
                 let c_mat = self.c_matrix(s);
                 let i_mat: Array2<Complex64> = Array2::eye(self.n_channels);
                 let ikc_mat = i_mat + k_mat * c_mat;
                 let ikc_mat_inv = ikc_mat.inv().unwrap();
                 FieldType::CVector(ikc_mat_inv.row(self.selected_channel).to_owned())
             },
-            None,
+            Some(vec![mass, barrier_factor]),
         )
     }
 }
@@ -438,24 +551,19 @@ impl AmplitudeBuilder for FrozenKMatrix {
     }
     fn to_amplitude(self) -> Amplitude {
         let ikc_inv_var = self.clone().to_variable();
+        let mass_name = ikc_inv_var.dependencies.clone().unwrap()[0].name.clone();
+        let bf_name = ikc_inv_var.dependencies.clone().unwrap()[1].name.clone();
         let var_name = ikc_inv_var.name.to_string();
         Amplitude::new(var_name.clone(), move |pars: &ParMap, vars: &VarMap| {
-            let fs_p4s_lab = vars["Final State P4"].momenta().unwrap();
-            let resonance_p4_lab: &FourMomentum = &self
-                .particle_info
-                .resonance_indices
-                .iter()
-                .map(|i| &fs_p4s_lab[*i])
-                .sum();
-            let s = resonance_p4_lab.m2();
-            let ikc_inv_vec = vars[&*var_name].cvector()?;
+            let s = vars[&*mass_name].scalar().powi(2);
+            let bf = vars[&*bf_name].cmatrix();
+            let ikc_inv_vec = vars[&*var_name].cvector();
             let betas = Array1::from_shape_fn(self.n_resonances, |i| {
-                pars[&format!("beta_{}", i)].unwrap_c_scalar().value()
+                pars[&format!("beta_{}", i)].cscalar().value()
             });
 
             let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {
-                ((betas[a] * self.g[[j, a]]) / (self.m[a].powi(2) - s))
-                    * self.barrier_factor(s, j, a)
+                ((betas[a] * self.g[[j, a]]) / (self.m[a].powi(2) - s)) * bf[[j, a]]
             });
             let p_vec = p_ja.sum_axis(Axis(1));
 
