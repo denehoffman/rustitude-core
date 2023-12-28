@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "accelerate-src"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "415ed64958754dbe991900f3940677e6a7eefb4d7367afd70d642677b0c7d19d"
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2210,6 +2216,7 @@ dependencies = [
 name = "rustitude"
 version = "0.1.1"
 dependencies = [
+ "accelerate-src",
  "approx 0.5.1",
  "argmin",
  "argmin-math",
