@@ -1,2 +1,4 @@
 /target
 *.root
+perf*
+*.svg
