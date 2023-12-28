@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub mod amplitude;
 pub mod dataset;
 pub mod four_momentum;

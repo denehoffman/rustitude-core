@@ -183,10 +183,11 @@ impl AmplitudeBuilder for Ylm {
     fn to_amplitude(self) -> Amplitude {
         let ylm_var = self.to_variable();
         let var_name = ylm_var.name.to_string();
-        Amplitude::new(var_name.clone(), move |_pars: &ParMap, vars: &VarMap| {
-            Ok(*(vars[&*var_name].cscalar()))
-        })
-        .with_deps(vec![ylm_var.clone()])
+        Amplitude::new(
+            var_name.clone(),
+            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar())),
+            Some(vec![ylm_var.clone()]),
+        )
     }
 }
 
@@ -282,10 +283,11 @@ impl AmplitudeBuilder for Zlm {
     fn to_amplitude(self) -> Amplitude {
         let zlm_var = self.to_variable();
         let var_name = zlm_var.name.to_string();
-        Amplitude::new(var_name.clone(), move |_pars: &ParMap, vars: &VarMap| {
-            Ok(*(vars[&*var_name].cscalar()))
-        })
-        .with_deps(vec![zlm_var.clone()])
+        Amplitude::new(
+            var_name.clone(),
+            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar())),
+            Some(vec![zlm_var.clone()]),
+        )
     }
 }
 
@@ -322,7 +324,6 @@ pub struct BarrierFactor {
     l: usize,
     n_resonances: usize,
     n_channels: usize,
-    particle_info: ParticleInfo,
     mass: Variable,
 }
 
@@ -351,7 +352,6 @@ impl BarrierFactor {
             l,
             n_resonances,
             n_channels,
-            particle_info,
             mass,
         }
     }
@@ -395,7 +395,8 @@ impl BarrierFactor {
 }
 impl VariableBuilder for BarrierFactor {
     fn to_variable(self) -> Variable {
-        let mass_name = self.mass.name;
+        let mass = self.mass.clone();
+        let mass_name = mass.name.clone();
         Variable::new(
             self.name.clone(),
             move |entry: &VarMap| {
@@ -405,7 +406,7 @@ impl VariableBuilder for BarrierFactor {
                     |(i, a)| self.barrier_factor(s, i, a),
                 ))
             },
-            Some(vec![self.mass]),
+            Some(vec![mass]),
         )
     }
 }
@@ -505,7 +506,7 @@ impl VariableBuilder for FrozenKMatrix {
             l: self.l,
             n_resonances: self.n_resonances,
             n_channels: self.n_channels,
-            particle_info: self.particle_info.clone(),
+            mass: mass.clone(),
         }
         .to_variable();
 
@@ -554,21 +555,24 @@ impl AmplitudeBuilder for FrozenKMatrix {
         let mass_name = ikc_inv_var.dependencies.clone().unwrap()[0].name.clone();
         let bf_name = ikc_inv_var.dependencies.clone().unwrap()[1].name.clone();
         let var_name = ikc_inv_var.name.to_string();
-        Amplitude::new(var_name.clone(), move |pars: &ParMap, vars: &VarMap| {
-            let s = vars[&*mass_name].scalar().powi(2);
-            let bf = vars[&*bf_name].cmatrix();
-            let ikc_inv_vec = vars[&*var_name].cvector();
-            let betas = Array1::from_shape_fn(self.n_resonances, |i| {
-                pars[&format!("beta_{}", i)].cscalar().value()
-            });
+        Amplitude::new(
+            var_name.clone(),
+            move |pars: &ParMap, vars: &VarMap| {
+                let s = vars[&*mass_name].scalar().powi(2);
+                let bf = vars[&*bf_name].cmatrix();
+                let ikc_inv_vec = vars[&*var_name].cvector();
+                let betas = Array1::from_shape_fn(self.n_resonances, |i| {
+                    pars[&format!("beta_{}", i)].cscalar().value()
+                });
 
-            let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {
-                ((betas[a] * self.g[[j, a]]) / (self.m[a].powi(2) - s)) * bf[[j, a]]
-            });
-            let p_vec = p_ja.sum_axis(Axis(1));
+                let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {
+                    ((betas[a] * self.g[[j, a]]) / (self.m[a].powi(2) - s)) * bf[[j, a]]
+                });
+                let p_vec = p_ja.sum_axis(Axis(1));
 
-            Ok(ikc_inv_vec.dot(&p_vec))
-        })
-        .with_deps(vec![ikc_inv_var.clone()])
+                Ok(ikc_inv_vec.dot(&p_vec))
+            },
+            Some(vec![ikc_inv_var.clone()]),
+        )
     }
 }

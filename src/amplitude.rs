@@ -123,7 +123,7 @@ impl std::fmt::Debug for Amplitude {
 }
 
 impl Amplitude {
-    pub fn new<F>(name: String, function: F) -> Self
+    pub fn new<F>(name: String, function: F, dependencies: Option<Vec<Variable>>) -> Self
     where
         F: 'static
             + Fn(&ParMap, &VarMap) -> Result<Complex64, Box<dyn Error + Send + Sync>>
@@ -133,17 +133,13 @@ impl Amplitude {
         Amplitude {
             name: Arc::new(name),
             function: Some(Arc::new(RwLock::new(function))),
+            dependencies,
             ..Default::default()
         }
     }
 
     fn with_pars(mut self, names: Vec<String>) -> Self {
         self.parameters = Some(Arc::new(RwLock::new(names.into_iter().collect())));
-        self
-    }
-
-    pub fn with_deps(mut self, dependencies: Vec<Variable>) -> Self {
-        self.dependencies = Some(dependencies);
         self
     }
 
@@ -562,13 +558,13 @@ impl Neg for Amplitude {
 
 impl From<f64> for Amplitude {
     fn from(value: f64) -> Self {
-        Amplitude::new(value.to_string(), move |_, _| Ok(value.into()))
+        Amplitude::new(value.to_string(), move |_, _| Ok(value.into()), None)
     }
 }
 
 impl From<Complex64> for Amplitude {
     fn from(value: Complex64) -> Self {
-        Amplitude::new(value.to_string(), move |_, _| Ok(value))
+        Amplitude::new(value.to_string(), move |_, _| Ok(value), None)
     }
 }
 
@@ -683,9 +679,11 @@ impl<'a> Parameter<'a> {
         self
     }
     pub fn as_amp(&self) -> Amplitude {
-        Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].scalar().as_complex())
-        })
+        Amplitude::new(
+            self.name.to_string(),
+            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].scalar().as_complex()),
+            None,
+        )
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")
     }
@@ -720,9 +718,11 @@ impl<'a> ComplexParameter<'a> {
     }
 
     pub fn as_amp(&self) -> Amplitude {
-        Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].cscalar().value())
-        })
+        Amplitude::new(
+            self.name.to_string(),
+            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].cscalar().value()),
+            None,
+        )
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")
     }

@@ -11,6 +11,22 @@ pub struct FourMomentum {
 }
 
 impl FourMomentum {
+    //! A four-momentum structure with helpful methods for boosts.
+    //!
+    //! This is the basic structure of a Lorentz four-vector
+    //! of the form (E, p⃗) where E is the energy and p⃗ is the
+    //! momentum.
+    //!
+    //! # Examples
+    //! ```
+    //! use rustitude::prelude::*;
+    //!
+    //! let vec_a = FourMomentum::new(1.3, 0.2, 0.3, 0.1);
+    //! let vec_b = FourMomentum::new(4.2, 0.5, 0.4, 0.5);
+    //!
+    //!
+    //! ```
+
     pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
         Self { e, px, py, pz }
     }
