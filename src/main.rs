@@ -135,21 +135,23 @@ fn main() {
 
     let mut dataset = gluex::open_gluex("data.parquet", true);
 
-    // let before = Instant::now();
-    // amp.par_resolve_dependencies(&mut dataset);
-    // println!("{:.2?}", before.elapsed());
-    // println!("par");
-    // for _ in 0..10 {
-    //     let before = Instant::now();
-    //     let y = amp.par_evaluate_on(
-    //         &[
-    //             &f0_500, &f0_980, &f0_1370, &f0_1500, &f0_1710, &f2_1270, &f2_1525, &f2_1810,
-    //             &f2_1950, &a0_980, &a0_1450, &a2_1320, &a2_1700,
-    //         ],
-    //         &dataset,
-    //     );
-    //     let sum: Complex64 = y.iter().sum();
-    //     println!("{sum}");
-    //     println!("{:.2?}", before.elapsed());
-    // }
+    println!("Resolving...");
+    let before = Instant::now();
+    amp.par_resolve_dependencies(&mut dataset);
+    println!("{:.2?}", before.elapsed());
+    println!("par");
+    for _ in 0..10 {
+        let before = Instant::now();
+        let y = amp.par_evaluate_on(
+            &[
+                f0_500, f0_980, f0_1370, f0_1500, f0_1710, f2_1270, f2_1525, f2_1810, f2_1950,
+                a0_980, a0_1450, a2_1320, a2_1700,
+            ],
+            &dataset,
+        );
+        let sum: Complex64 = y.iter().sum();
+        println!("{sum}");
+        println!("{:.2?}", before.elapsed());
+    }
+    println!("{}", f0_500.cscalar().value());
 }

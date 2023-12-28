@@ -247,7 +247,7 @@ impl Amplitude {
             }
         }
     }
-    pub fn evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
+    pub fn evaluate_on(&self, pars: &[ParameterType], dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
             .map(|param| {
@@ -273,7 +273,7 @@ impl Amplitude {
         output
     }
 
-    pub fn par_evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
+    pub fn par_evaluate_on(&self, pars: &[ParameterType], dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
             .map(|param| {
