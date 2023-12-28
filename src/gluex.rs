@@ -545,7 +545,6 @@ impl AmplitudeBuilder for FrozenKMatrix {
     fn internal_parameter_names(&self) -> Option<Vec<String>> {
         Some(
             (0..self.n_resonances)
-                .into_iter()
                 .map(|i| format!("beta_{}", i))
                 .collect(),
         )

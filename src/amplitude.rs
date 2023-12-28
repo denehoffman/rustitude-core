@@ -176,7 +176,7 @@ impl Amplitude {
             .iter()
             .filter_map(|(external, internal)| {
                 pars.get(external)
-                    .map(|par| (internal.clone(), par.clone()))
+                    .map(|par| (internal.clone(), *par))
             })
             .collect();
         if let Some(ref func_arc) = self.function {
@@ -279,7 +279,7 @@ impl Amplitude {
                         ParameterType::CScalar(par) => par.name,
                     }
                     .to_string(),
-                    param.clone(),
+                    *param,
                 )
             })
             .collect();

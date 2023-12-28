@@ -18,19 +18,19 @@ impl<'a> ParallelExtendedMaximumLikelihood<'a> {
     }
 }
 
-fn params_from_vec<'a>(vals: &Vec<f64>, pars: &Vec<ParameterType<'a>>) -> Vec<ParameterType<'a>> {
+fn params_from_vec<'a>(vals: &[f64], pars: &Vec<ParameterType<'a>>) -> Vec<ParameterType<'a>> {
     let mut i: usize = 0;
     let mut new_pars: Vec<ParameterType> = Vec::new();
     for partype in pars {
         match partype {
             ParameterType::Scalar(par) => {
-                let mut new_par = par.clone();
+                let mut new_par = *par;
                 new_par.value = vals[i];
                 new_pars.push(new_par.into());
                 i += 1;
             }
             ParameterType::CScalar(par) => {
-                let mut new_par = par.clone();
+                let mut new_par = *par;
                 new_par.a = vals[i];
                 new_par.b = vals[i + 1];
                 new_pars.push(new_par.into());
