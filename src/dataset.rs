@@ -96,12 +96,12 @@ impl Dataset {
     pub fn new(n_entries: usize) -> Self {
         let entries: Vec<VarMap> = (0..n_entries)
             .map(|i| {
-                let mut entry = HashMap::new();
+                let mut entry = HashMap::default();
                 entry.insert("Index".to_string(), FieldType::Index(i));
                 entry
             })
             .collect();
-        let mut prunable = HashMap::new();
+        let mut prunable = HashMap::default();
         prunable.insert("Index".to_string(), false);
         Self {
             entries,
@@ -144,10 +144,7 @@ impl Dataset {
             }
         }
         // then resolve the variable itself
-        let fn_lock = variable
-            .function
-            .read()
-            .expect("Function lock not acquired");
+        let fn_lock = variable.function.read();
         if !self.prunable.contains_key(&*variable.name) {
             #[allow(clippy::redundant_closure)]
             let field: Vec<FieldType> = self.entries.iter().map(|entry| fn_lock(entry)).collect();
@@ -164,10 +161,7 @@ impl Dataset {
             }
         }
         // then resolve the variable itself
-        let fn_lock = variable
-            .function
-            .read()
-            .expect("Function lock not acquired");
+        let fn_lock = variable.function.read();
         if !self.prunable.contains_key(&*variable.name) {
             #[allow(clippy::redundant_closure)]
             let field: Vec<FieldType> = self

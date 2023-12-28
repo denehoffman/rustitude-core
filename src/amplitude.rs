@@ -2,10 +2,14 @@ use derive_more::IsVariant;
 use derive_more::Unwrap;
 use derive_new::new;
 use rayon::prelude::*;
-use std::collections::HashSet;
+use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashSet as HashSet;
+// use std::collections::HashMap;
+// use std::collections::HashSet;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-use std::sync::RwLock;
-use std::{collections::HashMap, error::Error, sync::Arc};
+// use std::sync::RwLock;
+use parking_lot::RwLock;
+use std::{error::Error, sync::Arc};
 
 use num_complex::Complex64;
 
@@ -146,16 +150,13 @@ impl Amplitude {
 
     pub fn map(self, external_name: String, internal_name: String) -> Self {
         if let Some(pars_arc) = &self.parameters {
-            let pars = pars_arc.read().expect("Failed to read pars");
+            let pars = pars_arc.read();
             println!("Names:");
             println!("{internal_name}");
             println!("{external_name}");
             println!("{:?}", pars);
             if pars.contains(&internal_name) {
-                let mut mappings_lock = self
-                    .parameter_mappings
-                    .write()
-                    .expect("Failed to access parameter_mappings");
+                let mut mappings_lock = self.parameter_mappings.write();
                 mappings_lock.insert(external_name, internal_name);
             } else {
                 panic!("Name not found!");
@@ -177,7 +178,6 @@ impl Amplitude {
         let internal_pars = self
             .parameter_mappings
             .read()
-            .expect("Failed to acquire lock on mappings")
             .iter()
             .filter_map(|(external, internal)| {
                 pars.get(external)
@@ -185,7 +185,7 @@ impl Amplitude {
             })
             .collect();
         if let Some(ref func_arc) = self.function {
-            let func_rwlock = func_arc.read().expect("Failed to read the RwLock");
+            let func_rwlock = func_arc.read();
             func_rwlock(&internal_pars, vars)
         } else {
             Err("Function is not set".into())
@@ -202,7 +202,7 @@ impl Amplitude {
         vars: &VarMap,
     ) -> Result<Complex64, Box<dyn Error + Send + Sync>> {
         if let Some(op) = &self.op {
-            let op_lock = op.read().expect("Failed to read op");
+            let op_lock = op.read();
             match &*op_lock {
                 Operation::Add(a, b) => {
                     let res_a = a.evaluate(pars, vars)?;
