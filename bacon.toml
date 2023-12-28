@@ -25,7 +25,9 @@ command = [
     "--",
     "-Wclippy::pedantic",
     "-Aclippy::similar-names",
-    "-Aclippy::dead_code",
+    "-Aclippy::must-use-candidate",
+    "-Aclippy::return-self-not-must-use",
+    "-Aclippy::module-name-repetitions",
 ]
 need_stdout = false
 
@@ -67,8 +69,11 @@ on_success = "back"                                                    # so that
 command = [
     "cargo",
     "run",
+    "--release",
     "--color",
     "always",
+    "-F",
+    "intel-mkl-static",
     # put launch parameters for your program behind a `--` separator
 ]
 need_stdout = true
