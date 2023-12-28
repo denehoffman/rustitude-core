@@ -31,6 +31,9 @@ derive_more = { version = "0.99.17", default_features = false, features = [
   "display",
 ] }
 derive-new = "0.6.0"
+parking_lot = "0.12.1"
+rustc-hash = "1.1.0"
+accelerate-src = "0.3.2"
 
 [features]
 default = []

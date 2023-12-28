@@ -1,12 +1,14 @@
 use rayon::prelude::*;
-use std::collections::HashMap;
+// use std::collections::HashMap;
+use rustc_hash::FxHashMap as HashMap;
 
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 
 use crate::{amplitude::Variable, four_momentum::FourMomentum, prelude::VarMap};
+use derive_more::IsVariant;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, IsVariant)]
 pub enum FieldType {
     Index(usize),
     Scalar(f64),
@@ -20,67 +22,67 @@ pub enum FieldType {
 }
 
 impl FieldType {
-    pub fn index(&self) -> Result<&usize, &str> {
+    pub fn index(&self) -> &usize {
         if let Self::Index(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to Index type")
+            panic!("Could not convert to Index type")
         }
     }
-    pub fn scalar(&self) -> Result<&f64, &str> {
+    pub fn scalar(&self) -> &f64 {
         if let Self::Scalar(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to Scalar type")
+            panic!("Could not convert to Scalar type")
         }
     }
-    pub fn cscalar(&self) -> Result<&Complex64, &str> {
+    pub fn cscalar(&self) -> &Complex64 {
         if let Self::CScalar(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to CScalar type")
+            panic!("Could not convert to CScalar type")
         }
     }
-    pub fn vector(&self) -> Result<&Array1<f64>, &str> {
+    pub fn vector(&self) -> &Array1<f64> {
         if let Self::Vector(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to Vector type")
+            panic!("Could not convert to Vector type")
         }
     }
-    pub fn cvector(&self) -> Result<&Array1<Complex64>, &str> {
+    pub fn cvector(&self) -> &Array1<Complex64> {
         if let Self::CVector(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to CVector type")
+            panic!("Could not convert to CVector type")
         }
     }
-    pub fn matrix(&self) -> Result<&Array2<f64>, &str> {
+    pub fn matrix(&self) -> &Array2<f64> {
         if let Self::Matrix(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to Matrix type")
+            panic!("Could not convert to Matrix type")
         }
     }
-    pub fn cmatrix(&self) -> Result<&Array2<Complex64>, &str> {
+    pub fn cmatrix(&self) -> &Array2<Complex64> {
         if let Self::CMatrix(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to CMatrix type")
+            panic!("Could not convert to CMatrix type")
         }
     }
-    pub fn momentum(&self) -> Result<&FourMomentum, &str> {
+    pub fn momentum(&self) -> &FourMomentum {
         if let Self::Momentum(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to Momentum type")
+            panic!("Could not convert to Momentum type")
         }
     }
-    pub fn momenta(&self) -> Result<&[FourMomentum], &str> {
+    pub fn momenta(&self) -> &[FourMomentum] {
         if let Self::MomentumVec(value) = self {
-            Ok(value)
+            value
         } else {
-            Err("Could not convert to MomentumVec type")
+            panic!("Could not convert to MomentumVec type")
         }
     }
 }
@@ -96,12 +98,12 @@ impl Dataset {
     pub fn new(n_entries: usize) -> Self {
         let entries: Vec<VarMap> = (0..n_entries)
             .map(|i| {
-                let mut entry = HashMap::new();
+                let mut entry = HashMap::default();
                 entry.insert("Index".to_string(), FieldType::Index(i));
                 entry
             })
             .collect();
-        let mut prunable = HashMap::new();
+        let mut prunable = HashMap::default();
         prunable.insert("Index".to_string(), false);
         Self {
             entries,
@@ -144,10 +146,7 @@ impl Dataset {
             }
         }
         // then resolve the variable itself
-        let fn_lock = variable
-            .function
-            .read()
-            .expect("Function lock not acquired");
+        let fn_lock = variable.function.read();
         if !self.prunable.contains_key(&*variable.name) {
             #[allow(clippy::redundant_closure)]
             let field: Vec<FieldType> = self.entries.iter().map(|entry| fn_lock(entry)).collect();
@@ -164,10 +163,7 @@ impl Dataset {
             }
         }
         // then resolve the variable itself
-        let fn_lock = variable
-            .function
-            .read()
-            .expect("Function lock not acquired");
+        let fn_lock = variable.function.read();
         if !self.prunable.contains_key(&*variable.name) {
             #[allow(clippy::redundant_closure)]
             let field: Vec<FieldType> = self

@@ -1,11 +1,14 @@
 use derive_more::IsVariant;
-use derive_more::Unwrap;
 use derive_new::new;
 use rayon::prelude::*;
-use std::collections::HashSet;
+use rustc_hash::FxHashMap as HashMap;
+use rustc_hash::FxHashSet as HashSet;
+// use std::collections::HashMap;
+// use std::collections::HashSet;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-use std::sync::RwLock;
-use std::{collections::HashMap, error::Error, sync::Arc};
+// use std::sync::RwLock;
+use parking_lot::RwLock;
+use std::{error::Error, sync::Arc};
 
 use num_complex::Complex64;
 
@@ -146,16 +149,13 @@ impl Amplitude {
 
     pub fn map(self, external_name: String, internal_name: String) -> Self {
         if let Some(pars_arc) = &self.parameters {
-            let pars = pars_arc.read().expect("Failed to read pars");
+            let pars = pars_arc.read();
             println!("Names:");
             println!("{internal_name}");
             println!("{external_name}");
             println!("{:?}", pars);
             if pars.contains(&internal_name) {
-                let mut mappings_lock = self
-                    .parameter_mappings
-                    .write()
-                    .expect("Failed to access parameter_mappings");
+                let mut mappings_lock = self.parameter_mappings.write();
                 mappings_lock.insert(external_name, internal_name);
             } else {
                 panic!("Name not found!");
@@ -177,7 +177,6 @@ impl Amplitude {
         let internal_pars = self
             .parameter_mappings
             .read()
-            .expect("Failed to acquire lock on mappings")
             .iter()
             .filter_map(|(external, internal)| {
                 pars.get(external)
@@ -185,7 +184,7 @@ impl Amplitude {
             })
             .collect();
         if let Some(ref func_arc) = self.function {
-            let func_rwlock = func_arc.read().expect("Failed to read the RwLock");
+            let func_rwlock = func_arc.read();
             func_rwlock(&internal_pars, vars)
         } else {
             Err("Function is not set".into())
@@ -202,7 +201,7 @@ impl Amplitude {
         vars: &VarMap,
     ) -> Result<Complex64, Box<dyn Error + Send + Sync>> {
         if let Some(op) = &self.op {
-            let op_lock = op.read().expect("Failed to read op");
+            let op_lock = op.read();
             match &*op_lock {
                 Operation::Add(a, b) => {
                     let res_a = a.evaluate(pars, vars)?;
@@ -248,7 +247,7 @@ impl Amplitude {
             }
         }
     }
-    pub fn evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
+    pub fn evaluate_on(&self, pars: &[ParameterType], dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
             .map(|param| {
@@ -274,7 +273,7 @@ impl Amplitude {
         output
     }
 
-    pub fn par_evaluate_on(&self, pars: &Vec<ParameterType>, dataset: &Dataset) -> Vec<Complex64> {
+    pub fn par_evaluate_on(&self, pars: &[ParameterType], dataset: &Dataset) -> Vec<Complex64> {
         let parameter_map: ParMap = pars
             .iter()
             .map(|param| {
@@ -599,10 +598,27 @@ pub trait AmplitudeBuilder {
     }
 }
 
-#[derive(Clone, Unwrap, Copy, IsVariant)]
+#[derive(Clone, Copy, IsVariant)]
 pub enum ParameterType<'a> {
     Scalar(Parameter<'a>),
     CScalar(ComplexParameter<'a>),
+}
+
+impl<'a> ParameterType<'a> {
+    pub fn scalar(&self) -> &Parameter<'a> {
+        if let Self::Scalar(value) = self {
+            value
+        } else {
+            panic!("Could not convert to Scalar type")
+        }
+    }
+    pub fn cscalar(&self) -> &ComplexParameter<'a> {
+        if let Self::CScalar(value) = self {
+            value
+        } else {
+            panic!("Could not convert to CScalar type")
+        }
+    }
 }
 
 impl<'a> From<Parameter<'a>> for ParameterType<'a> {
@@ -645,6 +661,10 @@ impl<'a> Parameter<'a> {
         self.value
     }
 
+    pub fn as_complex(&self) -> Complex64 {
+        self.value.into()
+    }
+
     pub fn with_bounds(
         mut self,
         lower_bound: Option<f64>,
@@ -664,7 +684,7 @@ impl<'a> Parameter<'a> {
     }
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].unwrap_scalar().into())
+            Ok(pars["parameter"].scalar().as_complex())
         })
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")
@@ -701,7 +721,7 @@ impl<'a> ComplexParameter<'a> {
 
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].unwrap_c_scalar().into())
+            Ok(pars["parameter"].cscalar().value())
         })
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")

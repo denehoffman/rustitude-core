@@ -3,6 +3,12 @@
 version = 3
 
 [[package]]
+name = "accelerate-src"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "415ed64958754dbe991900f3940677e6a7eefb4d7367afd70d642677b0c7d19d"
+
+[[package]]
 name = "addr2line"
 version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2198,6 +2204,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d626bb9dae77e28219937af045c257c28bfd3f69333c512553507f5f9798cb76"
 
 [[package]]
+name = "rustc-hash"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
 name = "rustc_version"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2210,6 +2222,7 @@ dependencies = [
 name = "rustitude"
 version = "0.1.1"
 dependencies = [
+ "accelerate-src",
  "approx 0.5.1",
  "argmin",
  "argmin-math",
@@ -2220,8 +2233,10 @@ dependencies = [
  "ndarray-linalg",
  "num",
  "num-complex",
+ "parking_lot",
  "polars",
  "rayon",
+ "rustc-hash",
  "sphrs",
  "thiserror",
 ]
