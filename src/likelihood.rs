@@ -58,6 +58,7 @@ impl<'a> CostFunction for ParallelExtendedMaximumLikelihood<'a> {
             .into_par_iter()
             .map(|val| val.re)
             .sum();
+        #[allow(clippy::cast_precision_loss)]
         Ok(-2.0
             * (fn_data - (self.data.n_entries as f64 / self.montecarlo.n_entries as f64) * fn_mc))
     }

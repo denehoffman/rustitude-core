@@ -22,6 +22,14 @@ pub enum FieldType {
 }
 
 impl FieldType {
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::Index` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Index`.
     pub fn index(&self) -> &usize {
         if let Self::Index(value) = self {
             value
@@ -29,6 +37,15 @@ impl FieldType {
             panic!("Could not convert to Index type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::Scalar` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Scalar`.
     pub fn scalar(&self) -> &f64 {
         if let Self::Scalar(value) = self {
             value
@@ -36,6 +53,15 @@ impl FieldType {
             panic!("Could not convert to Scalar type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::CScalar` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::CScalar`.
     pub fn cscalar(&self) -> &Complex64 {
         if let Self::CScalar(value) = self {
             value
@@ -43,6 +69,15 @@ impl FieldType {
             panic!("Could not convert to CScalar type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::Vector` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Vector`.
     pub fn vector(&self) -> &Array1<f64> {
         if let Self::Vector(value) = self {
             value
@@ -50,6 +85,15 @@ impl FieldType {
             panic!("Could not convert to Vector type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::CVector` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::CVector`.
     pub fn cvector(&self) -> &Array1<Complex64> {
         if let Self::CVector(value) = self {
             value
@@ -57,6 +101,14 @@ impl FieldType {
             panic!("Could not convert to CVector type")
         }
     }
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::Matrix` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Matrix`.
     pub fn matrix(&self) -> &Array2<f64> {
         if let Self::Matrix(value) = self {
             value
@@ -64,6 +116,15 @@ impl FieldType {
             panic!("Could not convert to Matrix type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::CMatrix` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::CMatrix`.
     pub fn cmatrix(&self) -> &Array2<Complex64> {
         if let Self::CMatrix(value) = self {
             value
@@ -71,6 +132,15 @@ impl FieldType {
             panic!("Could not convert to CMatrix type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::Momentum` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Momentum`.
     pub fn momentum(&self) -> &FourMomentum {
         if let Self::Momentum(value) = self {
             value
@@ -78,6 +148,15 @@ impl FieldType {
             panic!("Could not convert to Momentum type")
         }
     }
+
+    /// Get the internal structure of a field.
+    ///
+    /// This function takes an enum `FieldType` and extracts a reference to the underlying
+    /// `FieldType::MomentumVec` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::MomentumVec`.
     pub fn momenta(&self) -> &[FourMomentum] {
         if let Self::MomentumVec(value) = self {
             value
@@ -111,7 +190,7 @@ impl Dataset {
             prunable,
         }
     }
-    pub fn add_field(&mut self, name: &str, field: Vec<FieldType>, prunable: bool) {
+    pub fn add_field(&mut self, name: &str, field: &[FieldType], prunable: bool) {
         for (i, entry) in &mut self.entries.iter_mut().enumerate() {
             entry.insert(name.to_string(), field[i].clone());
         }
@@ -150,7 +229,7 @@ impl Dataset {
         if !self.prunable.contains_key(&*variable.name) {
             #[allow(clippy::redundant_closure)]
             let field: Vec<FieldType> = self.entries.iter().map(|entry| fn_lock(entry)).collect();
-            self.add_field(&variable.name, field, prunable);
+            self.add_field(&variable.name, &field, prunable);
         }
     }
     pub fn par_resolve_dependencies(&mut self, variable: Variable, prunable: bool) {
@@ -171,7 +250,7 @@ impl Dataset {
                 .par_iter()
                 .map(|entry| fn_lock(entry))
                 .collect();
-            self.add_field(&variable.name, field, prunable);
+            self.add_field(&variable.name, &field, prunable);
         }
     }
 }

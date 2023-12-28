@@ -143,13 +143,16 @@ impl Amplitude {
         self
     }
 
+    /// Adds a mapping between an external and internal parameter to the amplitude by name.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `internal_name` is not a named parameter in the amplitude definition. Also
+    /// panics if you try to call map on an amplitude which has no internal parameters.
+    #[must_use]
     pub fn map(self, external_name: String, internal_name: String) -> Self {
         if let Some(pars_arc) = &self.parameters {
             let pars = pars_arc.read();
-            println!("Names:");
-            println!("{internal_name}");
-            println!("{external_name}");
-            println!("{:?}", pars);
             if pars.contains(&internal_name) {
                 let mut mappings_lock = self.parameter_mappings.write();
                 mappings_lock.insert(external_name, internal_name);
@@ -161,6 +164,7 @@ impl Amplitude {
         }
         self
     }
+    #[must_use]
     pub fn link(self, external_name: &str, internal_name: &str) -> Self {
         self.map(external_name.to_string(), internal_name.to_string())
     }
@@ -175,8 +179,7 @@ impl Amplitude {
             .read()
             .iter()
             .filter_map(|(external, internal)| {
-                pars.get(external)
-                    .map(|par| (internal.clone(), *par))
+                pars.get(external).map(|par| (internal.clone(), *par))
             })
             .collect();
         if let Some(ref func_arc) = self.function {
@@ -187,10 +190,13 @@ impl Amplitude {
         }
     }
 
-    /// TODO: need to finish writing the resolver and then implement the typical Scalar/CScalar
-    /// amps, along with something that turns pars into amps maybe, I think we can do that now.
-    /// Finally, need to make a Var -> Amp system and then wrap it all together.
-
+    /// Evaluate an amplitude for a set of parameters `pars` and a set of variables `vars`.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if anything happens to raise an error in the evaluation of any
+    /// sub-amplitudes or in running _evaluate, which will either pass errors from the internal
+    /// amplitude's function, or will raise an error if the amplitude has no set function.
     pub fn evaluate(
         &self,
         pars: &ParMap,
@@ -263,7 +269,7 @@ impl Amplitude {
             if let Ok(res_val) = res {
                 output.push(res_val);
             } else {
-                println!("{res:?}")
+                println!("{res:?}");
             }
         }
         output
@@ -576,7 +582,6 @@ pub trait AmplitudeBuilder {
         Self: Sized,
     {
         if let Some(internal_names) = self.internal_parameter_names() {
-            println!("Parnames {:?}", internal_names);
             let external_names: Vec<&str> = parameters
                 .iter()
                 .map(|par_type| match par_type {
@@ -586,7 +591,7 @@ pub trait AmplitudeBuilder {
                 .collect();
             internal_names.iter().zip(external_names.iter()).fold(
                 self.to_amplitude().with_pars(internal_names.clone()),
-                |amp, (i_name, e_name)| amp.map(e_name.to_string(), i_name.to_string()),
+                |amp, (i_name, e_name)| amp.map((*e_name).to_string(), i_name.to_string()),
             )
         } else {
             self.to_amplitude()
@@ -601,6 +606,14 @@ pub enum ParameterType<'a> {
 }
 
 impl<'a> ParameterType<'a> {
+    /// Get the internal structure of a parameter.
+    ///
+    /// This function takes an enum `ParameterType` and extracts a reference to the underlying
+    /// `ParameterType::Scalar` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::Scalar`.
     pub fn scalar(&self) -> &Parameter<'a> {
         if let Self::Scalar(value) = self {
             value
@@ -608,6 +621,15 @@ impl<'a> ParameterType<'a> {
             panic!("Could not convert to Scalar type")
         }
     }
+
+    /// Get the internal structure of a parameter.
+    ///
+    /// This function takes an enum `ParameterType` and extracts a reference to the underlying
+    /// `ParameterType::CScalar` if it is an instance of that variant or panics otherwise.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the underlying variant is not a `ParameterType::CScalar`.
     pub fn cscalar(&self) -> &ComplexParameter<'a> {
         if let Self::CScalar(value) = self {
             value

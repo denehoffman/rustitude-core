@@ -59,10 +59,18 @@ fn extract_array1(column_name: &str, df: &DataFrame) -> Vec<Array1<f64>> {
         .collect::<Vec<Array1<f64>>>();
 }
 
+/// Open a `GlueX` ROOT data file (flat tree) by `path`. `polarized` is a flag which is `true` if the
+/// data file has polarization information included in the `"Px_Beam"` and `"Py_Beam"` branches.
+///
+/// # Panics
+///
+/// Panics if it can't find any of the required branches, or if they contain data with an
+/// unexpected type.
 pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
     let dataframe = open_parquet(path);
     let col_n_fs = dataframe.column("NumFinalState").unwrap();
     let mut dataset = Dataset::new(col_n_fs.len());
+    #[allow(clippy::cast_sign_loss)]
     let n_fs = col_n_fs.i32().unwrap().into_iter().next().unwrap().unwrap() as usize;
     let e_beam = extract_scalar("E_Beam", &dataframe);
     let px_beam = extract_scalar("Px_Beam", &dataframe);
@@ -80,8 +88,8 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
             beam_p4.push(FieldType::Momentum(FourMomentum::new(e, 0.0, 0.0, e)));
             eps.push(FieldType::Vector(Array1::from_vec(vec![px, py, 0.0])));
         }
-        dataset.add_field("Beam P4", beam_p4, false);
-        dataset.add_field("EPS", eps, false);
+        dataset.add_field("Beam P4", &beam_p4, false);
+        dataset.add_field("EPS", &eps, false);
     } else {
         for (((e, px), py), pz) in e_beam
             .into_iter()
@@ -89,16 +97,16 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
             .zip(py_beam.into_iter())
             .zip(pz_beam.into_iter())
         {
-            beam_p4.push(FieldType::Momentum(FourMomentum::new(e, px, py, pz)))
+            beam_p4.push(FieldType::Momentum(FourMomentum::new(e, px, py, pz)));
         }
-        dataset.add_field("Beam P4", beam_p4, false);
+        dataset.add_field("Beam P4", &beam_p4, false);
     }
     let weight = extract_scalar_field("Weight", &dataframe);
     let e_finalstate = extract_array1("E_FinalState", &dataframe);
     let px_finalstate = extract_array1("Px_FinalState", &dataframe);
     let py_finalstate = extract_array1("Py_FinalState", &dataframe);
     let pz_finalstate = extract_array1("Pz_FinalState", &dataframe);
-    dataset.add_field("Weight", weight, false);
+    dataset.add_field("Weight", &weight, false);
     let fs_p4: Vec<FieldType> = e_finalstate
         .iter()
         .zip(px_finalstate.iter())
@@ -112,7 +120,7 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
             FieldType::MomentumVec(momentum_vec)
         })
         .collect();
-    dataset.add_field("Final State P4", fs_p4, false);
+    dataset.add_field("Final State P4", &fs_p4, false);
     dataset
 }
 
@@ -169,6 +177,7 @@ impl VariableBuilder for Ylm {
                     daughter_p3_res.dot(&y),
                     daughter_p3_res.dot(&z),
                 );
+                #[allow(clippy::cast_possible_wrap)]
                 FieldType::CScalar(ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p))
             },
             None,
@@ -248,6 +257,7 @@ impl VariableBuilder for Zlm {
                     daughter_p3_res.dot(&y),
                     daughter_p3_res.dot(&z),
                 );
+                #[allow(clippy::cast_possible_wrap)]
                 let ylm = ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p);
 
                 // Polarization
@@ -316,6 +326,15 @@ impl VariableBuilder for Mass {
 }
 
 #[derive(Clone)]
+pub struct KMatrixConstants {
+    pub g: Array2<f64>,
+    pub m: Array1<f64>,
+    pub c: Array2<f64>,
+    pub m1: Array1<f64>,
+    pub m2: Array1<f64>,
+}
+
+#[derive(Clone)]
 pub struct BarrierFactor {
     name: String,
     m: Array1<f64>,
@@ -330,14 +349,12 @@ pub struct BarrierFactor {
 impl BarrierFactor {
     fn new(
         name: String,
-        m: Array1<f64>,
-        m1: Array1<f64>,
-        m2: Array1<f64>,
+        constants: KMatrixConstants,
         l: usize,
-        particle_info: ParticleInfo,
+        particle_info: &ParticleInfo,
     ) -> BarrierFactor {
-        let n_resonances = m.len();
-        let n_channels = m1.len();
+        let n_resonances = constants.g.ncols();
+        let n_channels = constants.g.nrows();
         let mass_name = format!("{}_mass", name.clone());
         let mass = Mass {
             name: mass_name.clone(),
@@ -346,9 +363,9 @@ impl BarrierFactor {
         .to_variable();
         BarrierFactor {
             name,
-            m,
-            m1,
-            m2,
+            m: constants.m,
+            m1: constants.m1,
+            m2: constants.m2,
             l,
             n_resonances,
             n_channels,
@@ -384,7 +401,7 @@ impl BarrierFactor {
             4 => ((12746.0 * z.powi(4)) / (z.powi(2) - 45.0 * z + 105.0).powi(2)
                 + 25.0 * z * (2.0 * z - 21.0).powi(2))
             .sqrt(),
-            l => panic!("L = {} is not yet implemented", l),
+            l => panic!("L = {l} is not yet implemented"),
         }
     }
     fn barrier_factor(&self, s: f64, channel: usize, resonance: usize) -> Complex64 {
@@ -437,25 +454,21 @@ impl FrozenKMatrix {
     pub fn new(
         name: &str,
         selected_channel: usize,
-        g: Array2<f64>,
-        m: Array1<f64>,
-        c: Array2<f64>,
-        m1: Array1<f64>,
-        m2: Array1<f64>,
+        constants: KMatrixConstants,
         l: usize,
         particle_info: ParticleInfo,
         adler_zero: Option<AdlerZero>,
     ) -> FrozenKMatrix {
-        let n_resonances = g.ncols();
-        let n_channels = g.nrows();
+        let n_resonances = constants.g.ncols();
+        let n_channels = constants.g.nrows();
         FrozenKMatrix {
             name: name.into(),
             selected_channel,
-            g,
-            m,
-            c,
-            m1,
-            m2,
+            g: constants.g,
+            m: constants.m,
+            c: constants.c,
+            m1: constants.m1,
+            m2: constants.m2,
             l,
             n_resonances,
             n_channels,
@@ -545,7 +558,7 @@ impl AmplitudeBuilder for FrozenKMatrix {
     fn internal_parameter_names(&self) -> Option<Vec<String>> {
         Some(
             (0..self.n_resonances)
-                .map(|i| format!("beta_{}", i))
+                .map(|i| format!("beta_{i}"))
                 .collect(),
         )
     }
@@ -561,7 +574,7 @@ impl AmplitudeBuilder for FrozenKMatrix {
                 let bf = vars[&*bf_name].cmatrix();
                 let ikc_inv_vec = vars[&*var_name].cvector();
                 let betas = Array1::from_shape_fn(self.n_resonances, |i| {
-                    pars[&format!("beta_{}", i)].cscalar().value()
+                    pars[&format!("beta_{i}")].cscalar().value()
                 });
 
                 let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {
