@@ -1,14 +1,11 @@
-use derive_more::IsVariant;
 use derive_new::new;
+use parking_lot::RwLock;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
 use rustc_hash::FxHashSet as HashSet;
-// use std::collections::HashMap;
-// use std::collections::HashSet;
 use std::ops::{Add, Div, Mul, Neg, Sub};
-// use std::sync::RwLock;
-use parking_lot::RwLock;
 use std::{error::Error, sync::Arc};
+use variantly::Variantly;
 
 use num_complex::Complex64;
 
@@ -599,44 +596,11 @@ pub trait AmplitudeBuilder {
     }
 }
 
-#[derive(Clone, Copy, IsVariant)]
+#[derive(Clone, Copy, Variantly)]
 pub enum ParameterType<'a> {
     Scalar(Parameter<'a>),
+    #[variantly(rename = "cscalar")]
     CScalar(ComplexParameter<'a>),
-}
-
-impl<'a> ParameterType<'a> {
-    /// Get the internal structure of a parameter.
-    ///
-    /// This function takes an enum `ParameterType` and extracts a reference to the underlying
-    /// `ParameterType::Scalar` if it is an instance of that variant or panics otherwise.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the underlying variant is not a `ParameterType::Scalar`.
-    pub fn scalar(&self) -> &Parameter<'a> {
-        if let Self::Scalar(value) = self {
-            value
-        } else {
-            panic!("Could not convert to Scalar type")
-        }
-    }
-
-    /// Get the internal structure of a parameter.
-    ///
-    /// This function takes an enum `ParameterType` and extracts a reference to the underlying
-    /// `ParameterType::CScalar` if it is an instance of that variant or panics otherwise.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the underlying variant is not a `ParameterType::CScalar`.
-    pub fn cscalar(&self) -> &ComplexParameter<'a> {
-        if let Self::CScalar(value) = self {
-            value
-        } else {
-            panic!("Could not convert to CScalar type")
-        }
-    }
 }
 
 impl<'a> From<Parameter<'a>> for ParameterType<'a> {
@@ -703,7 +667,7 @@ impl<'a> Parameter<'a> {
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(
             self.name.to_string(),
-            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].scalar().as_complex()),
+            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].scalar().unwrap().as_complex()),
             None,
         )
         .with_pars(vec!["parameter".to_string()])
@@ -742,7 +706,7 @@ impl<'a> ComplexParameter<'a> {
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(
             self.name.to_string(),
-            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].cscalar().value()),
+            |pars: &ParMap, _vars: &VarMap| Ok(pars["parameter"].cscalar().unwrap().value()),
             None,
         )
         .with_pars(vec!["parameter".to_string()])

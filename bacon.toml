@@ -74,6 +74,7 @@ command = [
     "always",
     "-F",
     "intel-mkl-static",
+    "--timings",
     # put launch parameters for your program behind a `--` separator
 ]
 need_stdout = true

@@ -162,5 +162,5 @@ fn main() {
         println!("{sum}");
         println!("{:.2?}", before.elapsed());
     }
-    println!("{}", f0_500.cscalar().value());
+    println!("{}", f0_500.cscalar().unwrap().value());
 }

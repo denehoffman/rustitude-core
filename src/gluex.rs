@@ -143,8 +143,8 @@ impl VariableBuilder for Ylm {
         Variable::new(
             format!("Y {} {}", self.l, self.m),
             move |entry: &VarMap| {
-                let beam_p4_lab = entry["Beam P4"].momentum();
-                let fs_p4s_lab = entry["Final State P4"].momenta();
+                let beam_p4_lab = entry["Beam P4"].momentum_ref().unwrap();
+                let fs_p4s_lab = entry["Final State P4"].momenta_ref().unwrap();
                 let fs_p4_lab = &fs_p4s_lab.iter().sum();
                 let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
                 let resonance_p4_lab: &FourMomentum = &self
@@ -194,7 +194,7 @@ impl AmplitudeBuilder for Ylm {
         let var_name = ylm_var.name.to_string();
         Amplitude::new(
             var_name.clone(),
-            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar())),
+            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar_ref().unwrap())),
             Some(vec![ylm_var.clone()]),
         )
     }
@@ -223,8 +223,8 @@ impl VariableBuilder for Zlm {
                 }
             ),
             move |entry: &VarMap| {
-                let beam_p4_lab = entry["Beam P4"].momentum();
-                let fs_p4s_lab = entry["Final State P4"].momenta();
+                let beam_p4_lab = entry["Beam P4"].momentum_ref().unwrap();
+                let fs_p4s_lab = entry["Final State P4"].momenta_ref().unwrap();
                 let fs_p4_lab = &fs_p4s_lab.iter().sum();
                 let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
                 let resonance_p4_lab: &FourMomentum = &self
@@ -261,7 +261,7 @@ impl VariableBuilder for Zlm {
                 let ylm = ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p);
 
                 // Polarization
-                let eps = Vector3::from_vec(entry["EPS"].vector().to_vec());
+                let eps = Vector3::from_vec(entry["EPS"].vector_ref().unwrap().to_vec());
                 let big_phi = y
                     .dot(&eps)
                     .atan2(beam_p4.momentum().normalize().dot(&eps.cross(&y)));
@@ -295,7 +295,7 @@ impl AmplitudeBuilder for Zlm {
         let var_name = zlm_var.name.to_string();
         Amplitude::new(
             var_name.clone(),
-            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar())),
+            move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar_ref().unwrap())),
             Some(vec![zlm_var.clone()]),
         )
     }
@@ -311,7 +311,7 @@ impl VariableBuilder for Mass {
         Variable::new(
             self.name,
             move |vars: &VarMap| {
-                let fs_p4s_lab = vars["Final State P4"].momenta();
+                let fs_p4s_lab = vars["Final State P4"].momenta_ref().unwrap();
                 let resonance_p4_lab: &FourMomentum = &self
                     .particle_info
                     .resonance_indices
@@ -417,7 +417,7 @@ impl VariableBuilder for BarrierFactor {
         Variable::new(
             self.name.clone(),
             move |entry: &VarMap| {
-                let s = entry[&*mass_name].scalar().powi(2);
+                let s = entry[&*mass_name].scalar_ref().unwrap().powi(2);
                 FieldType::CMatrix(Array2::from_shape_fn(
                     (self.n_channels, self.n_resonances),
                     |(i, a)| self.barrier_factor(s, i, a),
@@ -526,8 +526,8 @@ impl VariableBuilder for FrozenKMatrix {
         Variable::new(
             self.name.clone(),
             move |entry: &VarMap| {
-                let s = entry[&mass_name].scalar().powi(2);
-                let bf = entry[&bf_name].cmatrix();
+                let s = entry[&mass_name].scalar_ref().unwrap().powi(2);
+                let bf = entry[&bf_name].cmatrix_ref().unwrap();
                 let k_ija = Array3::from_shape_fn(
                     (self.n_channels, self.n_channels, self.n_resonances),
                     |(i, j, a)| {
@@ -570,11 +570,11 @@ impl AmplitudeBuilder for FrozenKMatrix {
         Amplitude::new(
             var_name.clone(),
             move |pars: &ParMap, vars: &VarMap| {
-                let s = vars[&*mass_name].scalar().powi(2);
-                let bf = vars[&*bf_name].cmatrix();
-                let ikc_inv_vec = vars[&*var_name].cvector();
+                let s = vars[&*mass_name].scalar_ref().unwrap().powi(2);
+                let bf = vars[&*bf_name].cmatrix_ref().unwrap();
+                let ikc_inv_vec = vars[&*var_name].cvector_ref().unwrap();
                 let betas = Array1::from_shape_fn(self.n_resonances, |i| {
-                    pars[&format!("beta_{i}")].cscalar().value()
+                    pars[&format!("beta_{i}")].cscalar().unwrap().value()
                 });
 
                 let p_ja = Array2::from_shape_fn((self.n_channels, self.n_resonances), |(j, a)| {

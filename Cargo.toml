@@ -37,6 +37,7 @@ derive_more = { version = "0.99.17", default_features = false, features = [
 derive-new = "0.6.0"
 parking_lot = "0.12.1"
 rustc-hash = "1.1.0"
+variantly = "0.4.0"
 [target.'cfg(target_os = "macos")'.dependencies]
 accelerate-src = "0.3.2"
 
