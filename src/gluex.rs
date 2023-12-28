@@ -135,8 +135,8 @@ impl VariableBuilder for Ylm {
         Variable::new(
             format!("Y {} {}", self.l, self.m),
             move |entry: &VarMap| {
-                let beam_p4_lab = entry["Beam P4"].momentum().unwrap();
-                let fs_p4s_lab = entry["Final State P4"].momenta().unwrap();
+                let beam_p4_lab = entry["Beam P4"].momentum();
+                let fs_p4s_lab = entry["Final State P4"].momenta();
                 let fs_p4_lab = &fs_p4s_lab.iter().sum();
                 let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
                 let resonance_p4_lab: &FourMomentum = &self
@@ -184,7 +184,7 @@ impl AmplitudeBuilder for Ylm {
         let ylm_var = self.to_variable();
         let var_name = ylm_var.name.to_string();
         Amplitude::new(var_name.clone(), move |_pars: &ParMap, vars: &VarMap| {
-            Ok(*(vars[&*var_name].cscalar()?))
+            Ok(*(vars[&*var_name].cscalar()))
         })
         .with_deps(vec![ylm_var.clone()])
     }
@@ -213,8 +213,8 @@ impl VariableBuilder for Zlm {
                 }
             ),
             move |entry: &VarMap| {
-                let beam_p4_lab = entry["Beam P4"].momentum().unwrap();
-                let fs_p4s_lab = entry["Final State P4"].momenta().unwrap();
+                let beam_p4_lab = entry["Beam P4"].momentum();
+                let fs_p4s_lab = entry["Final State P4"].momenta();
                 let fs_p4_lab = &fs_p4s_lab.iter().sum();
                 let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
                 let resonance_p4_lab: &FourMomentum = &self
@@ -250,7 +250,7 @@ impl VariableBuilder for Zlm {
                 let ylm = ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p);
 
                 // Polarization
-                let eps = Vector3::from_vec(entry["EPS"].vector().unwrap().to_vec());
+                let eps = Vector3::from_vec(entry["EPS"].vector().to_vec());
                 let big_phi = y
                     .dot(&eps)
                     .atan2(beam_p4.momentum().normalize().dot(&eps.cross(&y)));

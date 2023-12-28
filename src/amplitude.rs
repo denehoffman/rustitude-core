@@ -1,5 +1,4 @@
 use derive_more::IsVariant;
-use derive_more::Unwrap;
 use derive_new::new;
 use rayon::prelude::*;
 use rustc_hash::FxHashMap as HashMap;
@@ -599,10 +598,27 @@ pub trait AmplitudeBuilder {
     }
 }
 
-#[derive(Clone, Unwrap, Copy, IsVariant)]
+#[derive(Clone, Copy, IsVariant)]
 pub enum ParameterType<'a> {
     Scalar(Parameter<'a>),
     CScalar(ComplexParameter<'a>),
+}
+
+impl<'a> ParameterType<'a> {
+    pub fn scalar(&self) -> &Parameter<'a> {
+        if let Self::Scalar(value) = self {
+            value
+        } else {
+            panic!("Could not convert to Scalar type")
+        }
+    }
+    pub fn cscalar(&self) -> &ComplexParameter<'a> {
+        if let Self::CScalar(value) = self {
+            value
+        } else {
+            panic!("Could not convert to CScalar type")
+        }
+    }
 }
 
 impl<'a> From<Parameter<'a>> for ParameterType<'a> {
@@ -645,6 +661,10 @@ impl<'a> Parameter<'a> {
         self.value
     }
 
+    pub fn as_complex(&self) -> Complex64 {
+        self.value.into()
+    }
+
     pub fn with_bounds(
         mut self,
         lower_bound: Option<f64>,
@@ -664,7 +684,7 @@ impl<'a> Parameter<'a> {
     }
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].unwrap_scalar().into())
+            Ok(pars["parameter"].scalar().as_complex())
         })
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")
@@ -701,7 +721,7 @@ impl<'a> ComplexParameter<'a> {
 
     pub fn as_amp(&self) -> Amplitude {
         Amplitude::new(self.name.to_string(), |pars: &ParMap, _vars: &VarMap| {
-            Ok(pars["parameter"].unwrap_c_scalar().into())
+            Ok(pars["parameter"].cscalar().value())
         })
         .with_pars(vec!["parameter".to_string()])
         .link(self.name, "parameter")
