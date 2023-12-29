@@ -1,5 +1,6 @@
 use std::time::Instant;
 
+use argmin::core::observers::SlogLogger;
 use argmin::core::Executor;
 use argmin::solver::particleswarm::ParticleSwarm;
 use ndarray::array;
@@ -224,11 +225,15 @@ fn main() {
                 100.0, 100.0,
             ],
         ),
-        20,
+        5,
     );
 
     let res = Executor::new(likelihood, solver)
         .configure(|state| state.max_iters(10))
+        .add_observer(
+            SlogLogger::term(),
+            argmin::core::observers::ObserverMode::Always,
+        )
         .run()
         .unwrap();
 
