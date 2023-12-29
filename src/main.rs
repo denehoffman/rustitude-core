@@ -4,6 +4,7 @@ use argmin::core::Executor;
 use argmin::solver::particleswarm::ParticleSwarm;
 use ndarray::array;
 use num_complex::Complex64;
+use num_traits::Pow;
 use rustitude::gluex;
 use rustitude::gluex::KMatrixConstants;
 use rustitude::prelude::*;

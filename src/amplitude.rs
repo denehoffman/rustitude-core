@@ -74,6 +74,7 @@ enum Operation<'a> {
     Sub(Amplitude<'a>, Amplitude<'a>),
     Mul(Amplitude<'a>, Amplitude<'a>),
     Div(Amplitude<'a>, Amplitude<'a>),
+    Pow(Amplitude<'a>, Amplitude<'a>),
     Neg(Amplitude<'a>),
     Sqrt(Amplitude<'a>),
     NormSquare(Amplitude<'a>),
@@ -238,6 +239,11 @@ impl<'a> Amplitude<'a> {
                     let res_a = a.evaluate(pars, vars)?;
                     let res_b = b.evaluate(pars, vars)?;
                     Ok(res_a / res_b)
+                }
+                Operation::Pow(a, b) => {
+                    let res_a = a.evaluate(pars, vars)?;
+                    let res_b = b.evaluate(pars, vars)?;
+                    Ok(res_a.powc(res_b))
                 }
                 Operation::Neg(a) => Ok(-1.0 * a.evaluate(pars, vars)?),
                 Operation::Sqrt(a) => Ok(a.evaluate(pars, vars)?.sqrt()),
@@ -639,6 +645,85 @@ impl<'a> Div<&'a Amplitude<'a>> for Amplitude<'a> {
     fn div(self, rhs: &'a Self) -> Self::Output {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Div(
+                self.clone(),
+                rhs.clone(),
+            )))),
+            external_parameters: Arc::new(RwLock::new(
+                self.external_parameters
+                    .read()
+                    .clone()
+                    .into_iter()
+                    .chain(rhs.external_parameters.read().clone())
+                    .collect(),
+            )),
+
+            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
+                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+                (Some(deps), None) | (None, Some(deps)) => Some(deps),
+                (None, None) => None,
+            },
+            ..Default::default()
+        }
+    }
+}
+
+impl<'a> num_traits::pow::Pow<Amplitude<'a>> for Amplitude<'a> {
+    type Output = Amplitude<'a>;
+
+    fn pow(self, rhs: Amplitude<'a>) -> Self::Output {
+        let external_parameters = Arc::new(RwLock::new(
+            self.external_parameters
+                .read()
+                .clone()
+                .into_iter()
+                .chain(rhs.external_parameters.read().clone())
+                .collect(),
+        ));
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
+
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Pow(self, rhs)))),
+            external_parameters,
+            dependencies,
+            ..Default::default()
+        }
+    }
+}
+impl<'a> num_traits::pow::Pow<Self> for &'a Amplitude<'a> {
+    type Output = Amplitude<'a>;
+    fn pow(self, rhs: Self) -> Self::Output {
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Pow(
+                self.clone(),
+                rhs.clone(),
+            )))),
+            external_parameters: Arc::new(RwLock::new(
+                self.external_parameters
+                    .read()
+                    .clone()
+                    .into_iter()
+                    .chain(rhs.external_parameters.read().clone())
+                    .collect(),
+            )),
+
+            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
+                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+                (Some(deps), None) | (None, Some(deps)) => Some(deps),
+                (None, None) => None,
+            },
+            ..Default::default()
+        }
+    }
+}
+impl<'a> num_traits::pow::Pow<&'a Amplitude<'a>> for Amplitude<'a> {
+    type Output = Amplitude<'a>;
+    fn pow(self, rhs: &'a Self) -> Self::Output {
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Pow(
                 self.clone(),
                 rhs.clone(),
             )))),

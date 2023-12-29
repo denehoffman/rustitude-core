@@ -25,6 +25,7 @@ ndarray = { version = "0.15.6", features = ["approx-0_5"] }
 ndarray-linalg = "0.16.0"
 num = "0.4.1"
 num-complex = "0.4.4"
+num-traits = "0.2.17"
 polars = { version = "0.35.4", features = ["parquet", "describe"] }
 rayon = "1.8.0"
 sphrs = "0.2.2"

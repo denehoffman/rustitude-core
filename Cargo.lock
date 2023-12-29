@@ -2279,6 +2279,7 @@ dependencies = [
  "ndarray-linalg",
  "num",
  "num-complex",
+ "num-traits",
  "parking_lot",
  "polars",
  "rayon",
