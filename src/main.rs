@@ -144,6 +144,8 @@ fn main() {
     let amp: Amplitude = ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr()
         + ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr();
 
+    let weight = Branch::new("Weight").into_amplitude();
+
     let mut dataset = gluex::open_gluex("data_pol.parquet", true).unwrap();
 
     println!("Resolving...");

@@ -6,7 +6,7 @@ pub mod gluex;
 pub mod likelihood;
 pub mod prelude {
     pub use crate::amplitude::{
-        Amplitude, AmplitudeBuilder, ParMap, Parameter, ParameterValue, VarMap, Variable,
+        Amplitude, AmplitudeBuilder, Branch, ParMap, Parameter, ParameterValue, VarMap, Variable,
         VariableBuilder,
     };
     pub use crate::dataset::{Dataset, FieldType};

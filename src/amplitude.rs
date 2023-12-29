@@ -908,3 +908,39 @@ impl Variable {
 pub trait VariableBuilder {
     fn into_variable(self) -> Variable;
 }
+
+pub struct Branch(String);
+
+impl Branch {
+    pub fn new(branch_name: &str) -> Branch {
+        Branch(branch_name.to_string())
+    }
+}
+
+impl<'a> AmplitudeBuilder<'a> for Branch {
+    fn into_amplitude(self) -> Amplitude<'a> {
+        //! Extracts a branch by name/type into an [`Amplitude`].
+        //!
+        //! This is particularly useful for things where you want to use a branch of your data file
+        //! as its own variable without making copies or dependencies.
+        //!
+        //! # Panics
+        //!
+        //! This will certainly panic if you try to convert branches which have field types other
+        //! than [`FieldType::Scalar`] or [`FieldType::CScalar`] because there is no way to
+        //! unambiguously convert these to [`Complex64`]. This will also panic if the branch isn't
+        //! found by name in the [`Dataset`].
+        Amplitude::new(
+            &self.0.clone(),
+            move |_: &ParMap, vars: &VarMap| match vars[&self.0] {
+                FieldType::Scalar(val) => Ok(val.into()),
+                FieldType::CScalar(val) => Ok(val),
+                _ => {
+                    panic!("Cannot convert FieldTypes other than Scalar and CScalar to amplitudes")
+                }
+            },
+            None,
+            None,
+        )
+    }
+}
