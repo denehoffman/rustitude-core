@@ -126,12 +126,11 @@ impl<'a> Amplitude<'a> {
     //! use num_complex::Complex64;
     //! use rustitude::prelude::*;
     //!
-    //! let amp = Amplitude::new("MyAmp", |pars: &ParMap, vars: &VarMap| {Ok(pars["parameter"].value.cscalar().unwrap() * 10.0)}, Some(vec!["parameter".to_string()]), None)
+    //! let amp = Amplitude::new("MyAmp", |pars: &ParMap, vars: &VarMap| {Ok(pars["parameter"].value.cscalar().unwrap() * 10.0)}, Some(vec!["parameter".to_string()]), None);
     //! let mut p = cpar!("MyPar", 2.0, 3.0);
-    //! amp.assign(&p, "parameter".to_string())
+    //! amp.assign(&p, "parameter".to_string());
     //!
-    //! let mut d: Dataset = get_dataset("myfile.parquet"); // Note: this doesn't run
-    //! amp.par_resolve_dependencies(&mut d);
+    //! let mut d: Dataset = Dataset::new(10);
     //! let res: Vec<Complex64> = amp.par_evaluate_on(&d);
     //! assert_eq!(res[0], Complex64::new(20.0, 30.0));
     //! ```

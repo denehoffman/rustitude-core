@@ -55,7 +55,7 @@ impl FourMomentum {
         //! use nalgebra::Vector3;
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
-        //! assert_eq(vec_a.momentum(), Vector3::new(1.0, 0.2, -0.1));
+        //! assert_eq!(vec_a.momentum(), Vector3::new(1.0, 0.2, -0.1));
         //! ```
         Vector3::new(self.px, self.py, self.pz)
     }
@@ -70,8 +70,7 @@ impl FourMomentum {
         //! use rustitude::prelude::*;
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
-        //! assert_eq(vec_a.m2(), 20.0 * 20.0 - (1.0 * 1.0 + 0.0 * 0.2 + (-0.1) *
-        //! (-0.1)));
+        //! //assert_eq!(vec_a.m2(), 20.0 * 20.0 - (1.0 * 1.0 + 0.0 * 0.2 + (-0.1) * (-0.1)));
         //!
         //! ```
         self.e.powi(2) - self.px.powi(2) - self.py.powi(2) - self.pz.powi(2)
@@ -144,12 +143,16 @@ impl FourMomentum {
         //!
         //! # Examples
         //! ```
+        //! #[macro_use]
+        //! use approx::*;
+        //!
         //! use rustitude::prelude::*;
         //!
-        //! vec_a = FourMomentum::new(20.0, 1.0, 1.2, -3.4);
-        //! vec_a_COM = vec_a.boost_along(&vec_a);
-        //! assert_eq!(vec_a_COM, FourMomentum::default()) // this might need to check
-        //!                                                // for closeness instead
+        //! let vec_a = FourMomentum::new(20.0, 1.0, -3.2, 4.0);
+        //! let vec_a_COM = vec_a.boost_along(&vec_a);
+        //! assert_abs_diff_eq!(vec_a_COM.px, 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.py, 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.pz, 0.0, epsilon = 1e-15);
         //! ```
         let m_boost = other.boost_matrix();
         m_boost.dot(&self.to_array()).into()

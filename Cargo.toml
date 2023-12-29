@@ -21,7 +21,7 @@ approx = { version = "0.5.1", features = ["num-complex"] }
 argmin = "0.8.1"
 argmin-math = "0.3.0"
 nalgebra = "0.32.3"
-ndarray = "0.15.6"
+ndarray = { version = "0.15.6", features = ["approx-0_5"] }
 ndarray-linalg = "0.16.0"
 num = "0.4.1"
 num-complex = "0.4.4"
