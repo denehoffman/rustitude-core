@@ -149,7 +149,9 @@ impl<'a> Amplitude<'a> {
             + Send,
     {
         let internal_parameters: Arc<RwLock<Vec<String>>> = match internal_parameters {
-            Some(pars) => Arc::new(RwLock::new(pars.iter().map(|s| s.to_string()).collect())),
+            Some(pars) => Arc::new(RwLock::new(
+                pars.iter().map(std::string::ToString::to_string).collect(),
+            )),
             None => Arc::new(RwLock::new(Vec::default())),
         };
         Amplitude {
@@ -273,17 +275,11 @@ impl<'a> Amplitude<'a> {
         let mut i: usize = 0;
         let mut e_pars_lock = self.external_parameters.write();
         for e_name in par_names {
-            if e_pars_lock
-                .get_mut(&e_name.to_string())
-                .unwrap()
-                .value
-                .is_scalar()
-            {
-                e_pars_lock.get_mut(&e_name.to_string()).unwrap().value =
-                    ParameterValue::Scalar(par_vals[i]);
+            if e_pars_lock.get_mut(*e_name).unwrap().value.is_scalar() {
+                e_pars_lock.get_mut(*e_name).unwrap().value = ParameterValue::Scalar(par_vals[i]);
                 i += 1;
             } else {
-                e_pars_lock.get_mut(&e_name.to_string()).unwrap().value =
+                e_pars_lock.get_mut(*e_name).unwrap().value =
                     ParameterValue::CScalar(Complex64::new(par_vals[i], par_vals[i + 1]));
                 i += 2;
             }

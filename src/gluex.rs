@@ -1,63 +1,14 @@
-use std::{f64::consts::PI, fs::File};
+use std::f64::consts::PI;
 
 use nalgebra::Vector3;
 use ndarray::{Array1, Array2, Array3, Axis};
 use ndarray_linalg::Inverse;
 use num_complex::Complex64;
-use polars::prelude::*;
+use polars::error::PolarsError;
 use sphrs::{ComplexSH, Coordinates, SHEval};
 
+use crate::dataset::{extract_field, open_parquet, PolarsTypeConversion};
 use crate::prelude::*;
-
-fn open_parquet(path: &str) -> DataFrame {
-    let file = File::open(path).expect("Failed to open");
-    ParquetReader::new(file).finish().expect("Failed to finish")
-}
-
-fn extract_scalar_field(column_name: &str, df: &DataFrame) -> Vec<FieldType> {
-    return df
-        .column(column_name)
-        .unwrap_or_else(|_| panic!("No branch {column_name}"))
-        .f32()
-        .unwrap()
-        .to_vec()
-        .into_iter()
-        .map(|x| FieldType::Scalar(x.unwrap().into()))
-        .collect::<Vec<_>>();
-}
-
-fn extract_scalar(column_name: &str, df: &DataFrame) -> Vec<f64> {
-    return df
-        .column(column_name)
-        .unwrap_or_else(|_| panic!("No branch {column_name}"))
-        .f32()
-        .unwrap()
-        .to_vec()
-        .into_iter()
-        .map(|x| x.unwrap().into())
-        .collect();
-}
-
-fn extract_array1(column_name: &str, df: &DataFrame) -> Vec<Array1<f64>> {
-    return df
-        .column(column_name)
-        .unwrap_or_else(|_| panic!("No branch {column_name}"))
-        .list()
-        .unwrap()
-        .into_iter()
-        .map(|x| {
-            Array1::from_vec(
-                x.unwrap()
-                    .f32()
-                    .unwrap()
-                    .to_vec()
-                    .into_iter()
-                    .map(|x| x.unwrap().into())
-                    .collect(),
-            )
-        })
-        .collect::<Vec<Array1<f64>>>();
-}
 
 /// Open a `GlueX` ROOT data file (flat tree) by `path`. `polarized` is a flag which is `true` if the
 /// data file has polarization information included in the `"Px_Beam"` and `"Py_Beam"` branches.
@@ -66,16 +17,21 @@ fn extract_array1(column_name: &str, df: &DataFrame) -> Vec<Array1<f64>> {
 ///
 /// Panics if it can't find any of the required branches, or if they contain data with an
 /// unexpected type.
-pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
-    let dataframe = open_parquet(path);
+///
+/// # Errors
+///
+/// Will raise [`PolarsError`] in the event that any of the branches aren't read or converted
+/// properly.
+pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, PolarsError> {
+    let dataframe = open_parquet(path).expect("Read error");
     let col_n_fs = dataframe.column("NumFinalState").unwrap();
     let mut dataset = Dataset::new(col_n_fs.len());
     #[allow(clippy::cast_sign_loss)]
     let n_fs = col_n_fs.i32().unwrap().into_iter().next().unwrap().unwrap() as usize;
-    let e_beam = extract_scalar("E_Beam", &dataframe);
-    let px_beam = extract_scalar("Px_Beam", &dataframe);
-    let py_beam = extract_scalar("Py_Beam", &dataframe);
-    let pz_beam = extract_scalar("Pz_Beam", &dataframe);
+    let e_beam = extract_field("E_Beam", PolarsTypeConversion::F32ToScalar, &dataframe)?;
+    let px_beam = extract_field("Px_Beam", PolarsTypeConversion::F32ToScalar, &dataframe)?;
+    let py_beam = extract_field("Py_Beam", PolarsTypeConversion::F32ToScalar, &dataframe)?;
+    let pz_beam = extract_field("Pz_Beam", PolarsTypeConversion::F32ToScalar, &dataframe)?;
     let mut beam_p4: Vec<FieldType> = Vec::new();
     let mut eps: Vec<FieldType> = Vec::new();
     if polarized {
@@ -85,8 +41,17 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
             .zip(py_beam.into_iter())
             .zip(pz_beam.into_iter())
         {
-            beam_p4.push(FieldType::Momentum(FourMomentum::new(e, 0.0, 0.0, e)));
-            eps.push(FieldType::Vector(Array1::from_vec(vec![px, py, 0.0])));
+            beam_p4.push(FieldType::Momentum(FourMomentum::new(
+                e.clone().scalar().unwrap(),
+                0.0,
+                0.0,
+                e.scalar().unwrap(),
+            )));
+            eps.push(FieldType::Vector(Array1::from_vec(vec![
+                px.scalar().unwrap(),
+                py.scalar().unwrap(),
+                0.0,
+            ])));
         }
         dataset.add_field("Beam P4", &beam_p4, false);
         dataset.add_field("EPS", &eps, false);
@@ -97,15 +62,36 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
             .zip(py_beam.into_iter())
             .zip(pz_beam.into_iter())
         {
-            beam_p4.push(FieldType::Momentum(FourMomentum::new(e, px, py, pz)));
+            beam_p4.push(FieldType::Momentum(FourMomentum::new(
+                e.scalar().unwrap(),
+                px.scalar().unwrap(),
+                py.scalar().unwrap(),
+                pz.scalar().unwrap(),
+            )));
         }
         dataset.add_field("Beam P4", &beam_p4, false);
     }
-    let weight = extract_scalar_field("Weight", &dataframe);
-    let e_finalstate = extract_array1("E_FinalState", &dataframe);
-    let px_finalstate = extract_array1("Px_FinalState", &dataframe);
-    let py_finalstate = extract_array1("Py_FinalState", &dataframe);
-    let pz_finalstate = extract_array1("Pz_FinalState", &dataframe);
+    let weight = extract_field("Weight", PolarsTypeConversion::F32ToScalar, &dataframe)?;
+    let e_finalstate = extract_field(
+        "E_FinalState",
+        PolarsTypeConversion::ListToVector,
+        &dataframe,
+    )?;
+    let px_finalstate = extract_field(
+        "Px_FinalState",
+        PolarsTypeConversion::ListToVector,
+        &dataframe,
+    )?;
+    let py_finalstate = extract_field(
+        "Py_FinalState",
+        PolarsTypeConversion::ListToVector,
+        &dataframe,
+    )?;
+    let pz_finalstate = extract_field(
+        "Pz_FinalState",
+        PolarsTypeConversion::ListToVector,
+        &dataframe,
+    )?;
     dataset.add_field("Weight", &weight, false);
     let fs_p4: Vec<FieldType> = e_finalstate
         .iter()
@@ -115,13 +101,18 @@ pub fn open_gluex(path: &str, polarized: bool) -> Dataset {
         .map(|(((e, px), py), pz)| {
             let mut momentum_vec = Vec::new();
             for i in 0..n_fs {
-                momentum_vec.push(FourMomentum::new(e[i], px[i], py[i], pz[i]));
+                momentum_vec.push(FourMomentum::new(
+                    e.clone().vector().unwrap()[i],
+                    px.clone().vector().unwrap()[i],
+                    py.clone().vector().unwrap()[i],
+                    pz.clone().vector().unwrap()[i],
+                ));
             }
             FieldType::MomentumVec(momentum_vec)
         })
         .collect();
     dataset.add_field("Final State P4", &fs_p4, false);
-    dataset
+    Ok(dataset)
 }
 
 #[derive(Clone)]

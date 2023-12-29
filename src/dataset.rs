@@ -1,5 +1,7 @@
+use std::fs::File;
+
+use polars::prelude::*;
 use rayon::prelude::*;
-// use std::collections::HashMap;
 use rustc_hash::FxHashMap as HashMap;
 
 use ndarray::{Array1, Array2};
@@ -111,5 +113,71 @@ impl Dataset {
                 .collect();
             self.add_field(&variable.name, &field, prunable);
         }
+    }
+}
+
+pub fn open_parquet(path: &str) -> Result<DataFrame, PolarsError> {
+    //! Opens a parquet file from a path string
+    //!
+    //! # Errors
+    //! Returns an error if the result isn't readable as a parquet file or if the file is not found.
+    let file = File::open(path)?;
+    ParquetReader::new(file).finish()
+}
+
+#[derive(Clone, Copy)]
+pub enum PolarsTypeConversion {
+    F32ToScalar,
+    F64ToScalar,
+    ListToVector,
+}
+
+pub fn extract_field(
+    column_name: &str,
+    column_type: PolarsTypeConversion,
+    df: &DataFrame,
+) -> Result<Vec<FieldType>, PolarsError> {
+    //! Converts a Polars [`polars::prelude::Series`] into a [`Vec<FieldType>`] according to
+    //! a conversion rule.
+    //!
+    //! # Panics
+    //!
+    //! Currently will panic if the branch/column name was not found in the
+    //! [`polars::prelude::DataFrame`]
+    //!
+    //! # Errors
+    //!
+    //! Returns [`PolarsError`] if any step in the conversion fails.
+    let series = df
+        .column(column_name)
+        .unwrap_or_else(|_| panic!("No branch {column_name}"));
+    match column_type {
+        PolarsTypeConversion::F32ToScalar => Ok(series
+            .f32()?
+            .to_vec()
+            .into_iter()
+            .map(|x| FieldType::Scalar(x.unwrap().into()))
+            .collect::<Vec<FieldType>>()),
+        PolarsTypeConversion::F64ToScalar => Ok(series
+            .f64()?
+            .to_vec()
+            .into_iter()
+            .map(|x| FieldType::Scalar(x.unwrap()))
+            .collect::<Vec<FieldType>>()),
+        PolarsTypeConversion::ListToVector => Ok(series
+            .list()?
+            .into_iter()
+            .map(|x| {
+                FieldType::Vector(Array1::from_vec(
+                    x.unwrap()
+                        .f32()
+                        .unwrap()
+                        .to_vec()
+                        .into_iter()
+                        .map(|x| x.unwrap().into())
+                        .collect(),
+                ))
+            })
+            .collect::<Vec<FieldType>>()),
     }
 }

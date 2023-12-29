@@ -144,7 +144,7 @@ fn main() {
     let amp: Amplitude = ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr()
         + ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr();
 
-    let mut dataset = gluex::open_gluex("data_pol.parquet", true);
+    let mut dataset = gluex::open_gluex("data_pol.parquet", true).unwrap();
 
     println!("Resolving...");
     let before = Instant::now();
@@ -160,7 +160,7 @@ fn main() {
     }
     println!("{}", f0_500.value.cscalar().unwrap());
 
-    let mut dataset_mc = gluex::open_gluex("accmc_pol.parquet", true);
+    let mut dataset_mc = gluex::open_gluex("accmc_pol.parquet", true).unwrap();
 
     println!("Resolving...");
     let before = Instant::now();
