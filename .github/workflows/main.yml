@@ -1,2 +1,0 @@
-- name: release-plz
-  uses: MarcoIeni/release-plz-action@v0.5.33
