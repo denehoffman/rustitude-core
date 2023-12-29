@@ -1,4 +1,5 @@
 /target
 *.root
+*.parquet
 perf*
 *.svg
