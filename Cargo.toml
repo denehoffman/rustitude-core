@@ -30,7 +30,7 @@ polars = { version = "0.35.4", features = ["parquet", "describe"] }
 rayon = "1.8.0"
 sphrs = "0.2.2"
 thiserror = "1.0.51"
-derive_more = { version = "0.99.17", default_features = false, features = [
+derive_more = { version = "0.99.17", default-features = false, features = [
   "is_variant",
   "unwrap",
   "display",
