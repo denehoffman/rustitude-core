@@ -2266,7 +2266,7 @@ dependencies = [
 
 [[package]]
 name = "rustitude"
-version = "0.1.2-beta.1"
+version = "0.1.2-beta.2"
 dependencies = [
  "accelerate-src",
  "approx 0.5.1",
