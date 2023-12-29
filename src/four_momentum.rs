@@ -14,7 +14,7 @@ impl FourMomentum {
     //! A four-momentum structure with helpful methods for boosts.
     //!
     //! This is the basic structure of a Lorentz four-vector
-    //! of the form $`(E, \overrightarrow{p})`$ where $E$ is the energy and $`\overrightarrow{p}`$ is the
+    //! of the form $`(E, \overrightarrow{p})`$ where $`E`$ is the energy and $`\overrightarrow{p}`$ is the
     //! momentum.
     //!
     //! # Examples
@@ -101,9 +101,9 @@ impl FourMomentum {
         //! ```math
         //! \mathbf{\Lambda} = \begin{pmatrix}
         //! \gamma & -\gamma \beta_x & -\gamma \beta_y & -\gamma \beta_z \\
-        //! -\gamma \beta_x & 1 + (\gamma - 1) \frac{\beta_x^2}{\overrightarrow{\beta}^2} & (g - 1) \frac{\beta_x \beta_y}{\overrightarrow{\beta}^2} & (g - 1) \frac{\beta_x \beta_z}{\overrightarrow{\beta}^2} \\
-        //! -\gamma \beta_y & (\gamma - 1) \frac{\beta_y \beta_x}{\overrightarrow{\beta}^2} & 1 + (g - 1) \frac{\beta_y^2}{\overrightarrow{\beta}^2} & (g - 1) \frac{\beta_y \beta_z}{\overrightarrow{\beta}^2} \\
-        //! -\gamma \beta_z & (\gamma - 1) \frac{\beta_z \beta_x}{\overrightarrow{\beta}^2} & (g - 1) \frac{\beta_z \beta_y}{\overrightarrow{\beta}^2} & 1 + (g - 1) \frac{\beta_z^2}{\overrightarrow{\beta}^2}
+        //! -\gamma \beta_x & 1 + (\gamma - 1) \frac{\beta_x^2}{\overrightarrow{\beta}^2} & (\gamma - 1) \frac{\beta_x \beta_y}{\overrightarrow{\beta}^2} & (\gamma - 1) \frac{\beta_x \beta_z}{\overrightarrow{\beta}^2} \\
+        //! -\gamma \beta_y & (\gamma - 1) \frac{\beta_y \beta_x}{\overrightarrow{\beta}^2} & 1 + (\gamma - 1) \frac{\beta_y^2}{\overrightarrow{\beta}^2} & (\gamma - 1) \frac{\beta_y \beta_z}{\overrightarrow{\beta}^2} \\
+        //! -\gamma \beta_z & (\gamma - 1) \frac{\beta_z \beta_x}{\overrightarrow{\beta}^2} & (\gamma - 1) \frac{\beta_z \beta_y}{\overrightarrow{\beta}^2} & 1 + (\gamma - 1) \frac{\beta_z^2}{\overrightarrow{\beta}^2}
         //! \end{pmatrix}
         //! ```
         //! where
