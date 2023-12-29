@@ -139,7 +139,7 @@ impl<'a> Amplitude<'a> {
     pub fn new<F>(
         name: &str,
         function: F,
-        internal_parameters: Option<Vec<String>>,
+        internal_parameters: Option<Vec<&str>>,
         dependencies: Option<Vec<Variable>>,
     ) -> Self
     where
@@ -149,7 +149,7 @@ impl<'a> Amplitude<'a> {
             + Send,
     {
         let internal_parameters: Arc<RwLock<Vec<String>>> = match internal_parameters {
-            Some(pars) => Arc::new(RwLock::new(pars)),
+            Some(pars) => Arc::new(RwLock::new(pars.iter().map(|s| s.to_string()).collect())),
             None => Arc::new(RwLock::new(Vec::default())),
         };
         Amplitude {
@@ -167,12 +167,12 @@ impl<'a> Amplitude<'a> {
     ///
     /// This function panics if the internal name is not in the list of internal names provided
     /// by the amplitude.
-    pub fn assign(&self, external_par: &Parameter<'a>, internal_name: String) {
+    pub fn assign(&self, external_par: &Parameter<'a>, internal_name: &str) {
         let internal_pars = self.internal_parameters.read();
-        if internal_pars.contains(&internal_name) {
+        if internal_pars.contains(&internal_name.to_string()) {
             self.parameter_mappings
                 .write()
-                .insert(*external_par, internal_name);
+                .insert(*external_par, internal_name.to_string());
             self.external_parameters
                 .write()
                 .insert(external_par.name.to_string(), *external_par);
@@ -269,15 +269,21 @@ impl<'a> Amplitude<'a> {
     ///
     /// Panics if a name in `par_names` is not found in the list of external parameter
     /// names for the amplitude.
-    pub fn load_params(&self, par_vals: &[f64], par_names: &[String]) {
+    pub fn load_params(&self, par_vals: &[f64], par_names: &[&str]) {
         let mut i: usize = 0;
         let mut e_pars_lock = self.external_parameters.write();
         for e_name in par_names {
-            if e_pars_lock.get_mut(e_name).unwrap().value.is_scalar() {
-                e_pars_lock.get_mut(e_name).unwrap().value = ParameterValue::Scalar(par_vals[i]);
+            if e_pars_lock
+                .get_mut(&e_name.to_string())
+                .unwrap()
+                .value
+                .is_scalar()
+            {
+                e_pars_lock.get_mut(&e_name.to_string()).unwrap().value =
+                    ParameterValue::Scalar(par_vals[i]);
                 i += 1;
             } else {
-                e_pars_lock.get_mut(e_name).unwrap().value =
+                e_pars_lock.get_mut(&e_name.to_string()).unwrap().value =
                     ParameterValue::CScalar(Complex64::new(par_vals[i], par_vals[i + 1]));
                 i += 2;
             }
@@ -703,7 +709,7 @@ pub trait AmplitudeBuilder<'a> {
         let amplitude = self.into_amplitude();
         let internal_names = amplitude.internal_parameters.read().clone();
         for (e_par, i_name) in parameters.iter().zip(internal_names.iter()) {
-            amplitude.assign(e_par, i_name.clone());
+            amplitude.assign(e_par, i_name);
         }
         amplitude
     }
@@ -753,7 +759,7 @@ impl<'a> From<Parameter<'a>> for Amplitude<'a> {
                     ParameterValue::CScalar(val) => val,
                 })
             },
-            Some(vec!["parameter".to_string()]),
+            Some(vec!["parameter"]),
             None,
         )
     }
@@ -891,12 +897,12 @@ impl std::fmt::Debug for Variable {
 }
 
 impl Variable {
-    pub fn new<F>(name: String, function: F, dependencies: Option<Vec<Variable>>) -> Self
+    pub fn new<F>(name: &str, function: F, dependencies: Option<Vec<Variable>>) -> Self
     where
         F: 'static + Fn(&VarMap) -> FieldType + Sync + Send,
     {
         Variable {
-            name: Arc::new(name),
+            name: Arc::new(name.to_string()),
             function: Arc::new(RwLock::new(function)),
             dependencies,
         }

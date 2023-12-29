@@ -22,11 +22,7 @@ impl<'a> CostFunction for ParallelExtendedMaximumLikelihood<'a> {
     type Param = Vec<f64>;
     type Output = f64;
     fn cost(&self, params: &Self::Param) -> Result<Self::Output, Error> {
-        let par_names: Vec<String> = self
-            .parameter_order
-            .iter()
-            .map(|p| p.name.to_string())
-            .collect();
+        let par_names: Vec<&str> = self.parameter_order.iter().map(|p| p.name).collect();
         self.amplitude.load_params(params, &par_names);
         let fn_data: f64 = self
             .amplitude

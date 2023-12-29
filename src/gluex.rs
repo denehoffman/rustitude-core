@@ -141,7 +141,7 @@ pub struct Ylm {
 impl VariableBuilder for Ylm {
     fn into_variable(self) -> Variable {
         Variable::new(
-            format!("Y {} {}", self.l, self.m),
+            &format!("Y {} {}", self.l, self.m),
             move |entry: &VarMap| {
                 let beam_p4_lab = entry["Beam P4"].momentum_ref().unwrap();
                 let fs_p4s_lab = entry["Final State P4"].momenta_ref().unwrap();
@@ -211,7 +211,7 @@ pub struct Zlm {
 impl VariableBuilder for Zlm {
     fn into_variable(self) -> Variable {
         Variable::new(
-            format!(
+            &format!(
                 "Z {} {} {}",
                 self.l,
                 self.m,
@@ -305,7 +305,7 @@ pub struct Mass {
 impl VariableBuilder for Mass {
     fn into_variable(self) -> Variable {
         Variable::new(
-            self.name,
+            &self.name,
             move |vars: &VarMap| {
                 let fs_p4s_lab = vars["Final State P4"].momenta_ref().unwrap();
                 let resonance_p4_lab: &FourMomentum = &self
@@ -411,7 +411,7 @@ impl VariableBuilder for BarrierFactor {
         let mass = self.mass.clone();
         let mass_name = mass.name.clone();
         Variable::new(
-            self.name.clone(),
+            &self.name.clone(),
             move |entry: &VarMap| {
                 let s = entry[&*mass_name].scalar_ref().unwrap().powi(2);
                 FieldType::CMatrix(Array2::from_shape_fn(
@@ -520,7 +520,7 @@ impl VariableBuilder for FrozenKMatrix {
         .into_variable();
 
         Variable::new(
-            self.name.clone(),
+            &self.name.clone(),
             move |entry: &VarMap| {
                 let s = entry[&mass_name].scalar_ref().unwrap().powi(2);
                 let bf = entry[&bf_name].cmatrix_ref().unwrap();
@@ -556,6 +556,10 @@ impl<'a> AmplitudeBuilder<'a> for FrozenKMatrix {
         let mass_name = ikc_inv_var.dependencies.clone().unwrap()[0].name.clone();
         let bf_name = ikc_inv_var.dependencies.clone().unwrap()[1].name.clone();
         let var_name = ikc_inv_var.name.clone();
+        let internal_parameters: Vec<String> = (0..self.n_resonances)
+            .map(|i| format!("beta_{i}"))
+            .collect();
+        let internal_parameters: Vec<&str> = internal_parameters.iter().map(|s| &**s).collect();
         Amplitude::new(
             &var_name.clone(),
             move |pars: &ParMap, vars: &VarMap| {
@@ -573,11 +577,7 @@ impl<'a> AmplitudeBuilder<'a> for FrozenKMatrix {
 
                 Ok(ikc_inv_vec.dot(&p_vec))
             },
-            Some(
-                (0..self.n_resonances)
-                    .map(|i| format!("beta_{i}"))
-                    .collect(),
-            ),
+            Some(internal_parameters),
             Some(vec![ikc_inv_var.clone()]),
         )
     }
