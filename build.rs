@@ -1,8 +1,10 @@
-#[cfg(any(feature = "openblas-system", feature = "netlib-system"))]
-fn main() {}
+//! Build specs for different LA systems
 
-#[cfg(not(any(feature = "openblas-system", feature = "netlib-system")))]
+/// Links to Accelerate framework on MacOS running
+#[cfg(target_os = "macos")]
 fn main() {
-    #[cfg(target_os = "macos")]
+    #[cfg(feature = "intel-mkl-system")]
     println!("cargo:rustc-link-lib=framework=Accelerate");
 }
+
+fn main() {}

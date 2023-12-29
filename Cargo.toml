@@ -50,3 +50,6 @@ netlib-static = ["blas", "ndarray-linalg/netlib-static"]
 netlib-system = ["blas", "ndarray-linalg/netlib-system"]
 intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
 intel-mkl-system = ["blas", "ndarray-linalg/intel-mkl-system"]
+
+[package.metadata.docs.rs]
+rustdoc-args = ["--html-in-header", "./src/docs-header.html"]

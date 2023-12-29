@@ -91,7 +91,7 @@ pub type ArcVarFn = Arc<RwLock<SendableVarFn>>;
 
 #[derive(Default, Clone)]
 pub struct Amplitude<'a> {
-    name: Arc<String>,
+    pub name: Arc<String>,
     function: Option<ArcAmpFn>,
     internal_parameters: Arc<RwLock<Vec<String>>>,
     pub external_parameters: Arc<RwLock<HashMap<String, Parameter<'a>>>>,
@@ -111,6 +111,32 @@ impl<'a> std::fmt::Debug for Amplitude<'a> {
 }
 
 impl<'a> Amplitude<'a> {
+    //! The [`Amplitude`] struct is at the core of this package. It holds a function which takes
+    //! [`ParMap`] and a [`VarMap`] and returns a [`Result`] containing a [`Complex64`].
+    //!
+    //! Amplitudes can optionally have `internal_parameters` and `dependencies`, which correspond
+    //! to [`Vec`]s of [`String`] or [`Variable`] respectively. Amplitudes can depend on
+    //! [`Variable`]s, but not vice-versa, and not with other Amplitudes. Amplitudes hold a set of
+    //! internal parameter names which amplitude developers can refer to when writing out the
+    //! mathematics behind the evaluating function.
+    //!
+    //! # Examples
+    //!
+    //! ```
+    //! use num_complex::Complex64;
+    //! use rustitude::prelude::*;
+    //!
+    //! let amp = Amplitude::new("MyAmp", |pars: &ParMap, vars: &VarMap| {Ok(pars["parameter"].value.cscalar().unwrap() * 10.0)}, Some(vec!["parameter".to_string()]), None)
+    //! let mut p = cpar!("MyPar", 2.0, 3.0);
+    //! amp.assign(&p, "parameter".to_string())
+    //!
+    //! let mut d: Dataset = get_dataset("myfile.parquet"); // Note: this doesn't run
+    //! amp.par_resolve_dependencies(&mut d);
+    //! let res: Vec<Complex64> = amp.par_evaluate_on(&d);
+    //! assert_eq!(res[0], Complex64::new(20.0, 30.0));
+    //! ```
+    //!
+
     pub fn new<F>(
         name: &str,
         function: F,

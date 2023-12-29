@@ -28,6 +28,7 @@ command = [
     "-Aclippy::must-use-candidate",
     "-Aclippy::return-self-not-must-use",
     "-Aclippy::module-name-repetitions",
+    "-Aclippy::doc-markdown",
 ]
 need_stdout = false
 
