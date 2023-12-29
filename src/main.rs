@@ -146,16 +146,19 @@ fn main() {
 
     let weight = Branch::new("Weight").into_amplitude();
 
+    let amplitude_data: Amplitude = amp.clone().pow(&weight);
+    let amplitude_montecarlo: Amplitude = amp.clone().pow(&weight);
+
     let mut dataset = gluex::open_gluex("data_pol.parquet", true).unwrap();
 
     println!("Resolving...");
     let before = Instant::now();
-    amp.par_resolve_dependencies(&mut dataset);
+    amplitude_data.par_resolve_dependencies(&mut dataset);
     println!("{:.2?}", before.elapsed());
     println!("par");
     for _ in 0..10 {
         let before = Instant::now();
-        let y = amp.par_evaluate_on(&dataset);
+        let y = amplitude_data.par_evaluate_on(&dataset);
         let sum: Complex64 = y.iter().sum();
         println!("{sum}");
         println!("{:.2?}", before.elapsed());
@@ -166,7 +169,7 @@ fn main() {
 
     println!("Resolving...");
     let before = Instant::now();
-    amp.par_resolve_dependencies(&mut dataset_mc);
+    amplitude_montecarlo.par_resolve_dependencies(&mut dataset_mc);
     println!("{:.2?}", before.elapsed());
     println!("par");
     for _ in 0..10 {
@@ -180,8 +183,9 @@ fn main() {
 
     let mut likelihood = ParallelExtendedMaximumLikelihood {
         data: dataset,
+        amplitude_data,
         montecarlo: dataset_mc,
-        amplitude: amp,
+        amplitude_montecarlo,
         parameter_order: vec![
             f0_500, f0_980, f0_1370, f0_1500, f0_1710, f2_1270, f2_1525, f2_1810, f2_1950, a0_980,
             a0_1450, a2_1320, a2_1700,

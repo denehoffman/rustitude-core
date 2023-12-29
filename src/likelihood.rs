@@ -5,15 +5,16 @@ use crate::prelude::{Amplitude, Dataset, Parameter};
 
 pub struct ParallelExtendedMaximumLikelihood<'a> {
     pub data: Dataset,
+    pub amplitude_data: Amplitude<'a>,
     pub montecarlo: Dataset,
-    pub amplitude: Amplitude<'a>,
+    pub amplitude_montecarlo: Amplitude<'a>,
     pub parameter_order: Vec<Parameter<'a>>,
 }
 
 impl<'a> ParallelExtendedMaximumLikelihood<'a> {
     pub fn setup(&mut self) {
-        self.amplitude.par_resolve_dependencies(&mut self.data);
-        self.amplitude
+        self.amplitude_data.par_resolve_dependencies(&mut self.data);
+        self.amplitude_montecarlo
             .par_resolve_dependencies(&mut self.montecarlo);
     }
 }
@@ -23,15 +24,16 @@ impl<'a> CostFunction for ParallelExtendedMaximumLikelihood<'a> {
     type Output = f64;
     fn cost(&self, params: &Self::Param) -> Result<Self::Output, Error> {
         let par_names: Vec<&str> = self.parameter_order.iter().map(|p| p.name).collect();
-        self.amplitude.load_params(params, &par_names);
+        self.amplitude_data.load_params(params, &par_names);
+        self.amplitude_montecarlo.load_params(params, &par_names);
         let fn_data: f64 = self
-            .amplitude
+            .amplitude_data
             .par_evaluate_on(&self.data)
             .into_par_iter()
             .map(|val| val.re.ln())
             .sum();
         let fn_mc: f64 = self
-            .amplitude
+            .amplitude_montecarlo
             .par_evaluate_on(&self.montecarlo)
             .into_par_iter()
             .map(|val| val.re)
