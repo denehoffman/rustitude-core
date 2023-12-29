@@ -1,5 +1,7 @@
 use std::time::Instant;
 
+use argmin::core::Executor;
+use argmin::solver::particleswarm::ParticleSwarm;
 use ndarray::array;
 use num_complex::Complex64;
 use rustitude::gluex;
@@ -19,7 +21,7 @@ fn main() {
         r: gluex::Reflectivity::Positive,
         particle_info: particles.clone(),
     }
-    .to_amplitude();
+    .into_amplitude();
 
     let zlm_22p = gluex::Zlm {
         l: 2,
@@ -27,7 +29,7 @@ fn main() {
         r: gluex::Reflectivity::Positive,
         particle_info: particles.clone(),
     }
-    .to_amplitude();
+    .into_amplitude();
 
     let f0_500 = cpar!("f0_500", 0.0, 0.0);
     let f0_980 = cpar!("f0_980", 100.0, 0.0);
@@ -64,7 +66,7 @@ fn main() {
             s_norm: 1.0,
         }),
     )
-    .with(pars!(f0_500, f0_980, f0_1370, f0_1500, f0_1710));
+    .assign(pars!(f0_500, f0_980, f0_1370, f0_1500, f0_1710));
 
     let f2_1270 = cpar!("f2_1270", 50.0, 50.0);
     let f2_1525 = cpar!("f2_1525", 50.0, 50.0);
@@ -95,7 +97,7 @@ fn main() {
         particles.clone(),
         None,
     )
-    .with(pars!(f2_1270, f2_1525, f2_1810, f2_1950));
+    .assign(pars!(f2_1270, f2_1525, f2_1810, f2_1950));
 
     let a0_980 = cpar!("a0_980", 50.0, 50.0);
     let a0_1450 = cpar!("a0_1450", 50.0, 50.0);
@@ -114,7 +116,7 @@ fn main() {
         particles.clone(),
         None,
     )
-    .with(pars!(a0_980, a0_1450));
+    .assign(pars!(a0_980, a0_1450));
 
     let a2_1320 = cpar!("a2_1320", 50.0, 50.0);
     let a2_1700 = cpar!("a2_1700", 50.0, 50.0);
@@ -137,12 +139,12 @@ fn main() {
         particles.clone(),
         None,
     )
-    .with(pars!(a2_1320, a2_1700));
+    .assign(pars!(a2_1320, a2_1700));
 
     let amp: Amplitude = ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr()
         + ((&f0 + &a0) * zlm_00p.real() + (&f2 + &a2) * zlm_22p.real()).norm_sqr();
 
-    let mut dataset = gluex::open_gluex("data.parquet", true);
+    let mut dataset = gluex::open_gluex("data_pol.parquet", true);
 
     println!("Resolving...");
     let before = Instant::now();
@@ -151,16 +153,79 @@ fn main() {
     println!("par");
     for _ in 0..10 {
         let before = Instant::now();
-        let y = amp.par_evaluate_on(
-            &[
-                f0_500, f0_980, f0_1370, f0_1500, f0_1710, f2_1270, f2_1525, f2_1810, f2_1950,
-                a0_980, a0_1450, a2_1320, a2_1700,
-            ],
-            &dataset,
-        );
+        let y = amp.par_evaluate_on(&dataset);
         let sum: Complex64 = y.iter().sum();
         println!("{sum}");
         println!("{:.2?}", before.elapsed());
     }
-    println!("{}", f0_500.cscalar().unwrap().value());
+    println!("{}", f0_500.value.cscalar().unwrap());
+
+    let mut dataset_mc = gluex::open_gluex("accmc_pol.parquet", true);
+
+    println!("Resolving...");
+    let before = Instant::now();
+    amp.par_resolve_dependencies(&mut dataset_mc);
+    println!("{:.2?}", before.elapsed());
+    println!("par");
+    for _ in 0..10 {
+        let before = Instant::now();
+        let y = amp.par_evaluate_on(&dataset_mc);
+        let sum: Complex64 = y.iter().sum();
+        println!("{sum}");
+        println!("{:.2?}", before.elapsed());
+    }
+    println!("{}", f0_500.value.cscalar().unwrap());
+
+    let mut likelihood = ParallelExtendedMaximumLikelihood {
+        data: dataset,
+        montecarlo: dataset_mc,
+        amplitude: amp,
+        parameter_order: vec![
+            f0_500, f0_980, f0_1370, f0_1500, f0_1710, f2_1270, f2_1525, f2_1810, f2_1950, a0_980,
+            a0_1450, a2_1320, a2_1700,
+        ],
+    };
+
+    likelihood.setup();
+
+    // let init_param: Vec<f64> = vec![
+    //     0.0, 0.0, //    f0_500
+    //     100.0, 0.0, //  f0_980
+    //     50.0, 50.0, //  f0_1370
+    //     50.0, 50.0, //  f0_1500
+    //     50.0, 50.0, //  f0_1710
+    //     50.0, 50.0, //  f2_1270
+    //     50.0, 50.0, //  f2_1525
+    //     50.0, 50.0, //  f2_1810
+    //     50.0, 50.0, //  f2_1950
+    //     50.0, 50.0, //  a0_980
+    //     50.0, 50.0, //  a0_1450
+    //     50.0, 50.0, //  a2_1320
+    //     50.0, 50.0, //  a2_1700
+    // ];
+
+    let solver = ParticleSwarm::new(
+        (
+            vec![
+                0.0, 0.0, -100.0, 0.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0,
+                -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0, -100.0,
+                -100.0, -100.0, -100.0, -100.0, -100.0,
+            ],
+            vec![
+                0.0, 0.0, 100.0, 0.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
+                100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0, 100.0,
+                100.0, 100.0,
+            ],
+        ),
+        20,
+    );
+
+    let res = Executor::new(likelihood, solver)
+        .configure(|state| state.max_iters(10))
+        .run()
+        .unwrap();
+
+    println!("{res}");
+
+    println!("{}", f0_500.value.cscalar().unwrap());
 }

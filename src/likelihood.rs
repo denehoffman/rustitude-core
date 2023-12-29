@@ -1,60 +1,42 @@
 use argmin::core::{CostFunction, Error};
 use rayon::prelude::*;
 
-use crate::prelude::{Amplitude, Dataset, ParameterType};
+use crate::prelude::{Amplitude, Dataset, Parameter};
 
 pub struct ParallelExtendedMaximumLikelihood<'a> {
-    data: Dataset,
-    montecarlo: Dataset,
-    amplitude: Amplitude,
-    parameters: Vec<ParameterType<'a>>,
+    pub data: Dataset,
+    pub montecarlo: Dataset,
+    pub amplitude: Amplitude<'a>,
+    pub parameter_order: Vec<Parameter<'a>>,
 }
 
 impl<'a> ParallelExtendedMaximumLikelihood<'a> {
-    fn setup(&mut self) {
+    pub fn setup(&mut self) {
         self.amplitude.par_resolve_dependencies(&mut self.data);
         self.amplitude
             .par_resolve_dependencies(&mut self.montecarlo);
     }
 }
 
-fn params_from_vec<'a>(vals: &[f64], pars: &Vec<ParameterType<'a>>) -> Vec<ParameterType<'a>> {
-    let mut i: usize = 0;
-    let mut new_pars: Vec<ParameterType> = Vec::new();
-    for partype in pars {
-        match partype {
-            ParameterType::Scalar(par) => {
-                let mut new_par = *par;
-                new_par.value = vals[i];
-                new_pars.push(new_par.into());
-                i += 1;
-            }
-            ParameterType::CScalar(par) => {
-                let mut new_par = *par;
-                new_par.a = vals[i];
-                new_par.b = vals[i + 1];
-                new_pars.push(new_par.into());
-                i += 2;
-            }
-        }
-    }
-    new_pars
-}
-
 impl<'a> CostFunction for ParallelExtendedMaximumLikelihood<'a> {
     type Param = Vec<f64>;
     type Output = f64;
     fn cost(&self, params: &Self::Param) -> Result<Self::Output, Error> {
-        let pars = params_from_vec(params, &self.parameters);
+        let par_names: Vec<String> = self
+            .parameter_order
+            .iter()
+            .map(|p| p.name.to_string())
+            .collect();
+        self.amplitude.load_params(params, &par_names);
         let fn_data: f64 = self
             .amplitude
-            .par_evaluate_on(&pars, &self.data)
+            .par_evaluate_on(&self.data)
             .into_par_iter()
             .map(|val| val.re.ln())
             .sum();
         let fn_mc: f64 = self
             .amplitude
-            .par_evaluate_on(&pars, &self.montecarlo)
+            .par_evaluate_on(&self.montecarlo)
             .into_par_iter()
             .map(|val| val.re)
             .sum();
