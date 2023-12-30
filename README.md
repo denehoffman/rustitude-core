@@ -1,14 +1,28 @@
-# Rustitude
-Demystifying Amplitude Analysis
+<p align="center">
+  <img
+    width="800"
+    src="https://raw.githubusercontent.com/denehoffman/rustitude/main/media/logo.png"
+  />
+</p>
+<p align="center">
+    <h1 align="center">Demystifying Amplitude Analysis</h1>
+</p>
 
-![GitHub last commit (branch)](https://img.shields.io/github/last-commit/denehoffman/rustitude/main)
-![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/denehoffman/rustitude/rust.yml)
-![GitHub License](https://img.shields.io/github/license/denehoffman/rustitude)
-![Crates.io](https://img.shields.io/crates/v/rustitude)
-![docs.rs](https://img.shields.io/docsrs/rustitude)
+<p align="center">
+  <a href="https://github.com/denehoffman/rustitude/commits/main/" alt="Lastest Commits">
+    <img src="https://img.shields.io/github/last-commit/denehoffman/rustitude/main" /></a>
+  <a href="https://github.com/denehoffman/rustitude/actions" alt="Build Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/denehoffman/rustitude/rust.yml" /></a>
+  <a href="LICENSE" alt="License">
+    <img src="https://img.shields.io/github/license/denehoffman/rustitude" /></a>
+  <a href="https://crates.io/crates/rustitude" alt="Rustitude on crates.io">
+    <img src="https://img.shields.io/crates/v/rustitude" /></a>
+  <a href="https://docs.rs/rustitude/latest/rustitude/" alt="Rustitude documentation on docs.rs">
+    <img src="https://img.shields.io/docsrs/rustitude" /></a>
+</p>
 
 
-## Note: This project is still very much under development and not recommended for use in actual research projects (yet)
+### Note: This project is still very much under development and not recommended for use in actual research projects (yet)
 
 ### Table of Contents
 - [Overview](#Overview)
