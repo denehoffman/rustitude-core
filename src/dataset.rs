@@ -1,118 +1,1013 @@
 use std::fs::File;
 
+use dashmap::DashMap;
 use polars::prelude::*;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
 
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
+use rustc_hash::FxHashMap;
 
-use crate::{amplitude::Variable, four_momentum::FourMomentum, prelude::VarMap};
+use crate::four_momentum::FourMomentum;
+use anyinput::anyinput;
+use thiserror::Error;
 use variantly::Variantly;
 
-#[derive(Debug, Clone, Variantly)]
-pub enum FieldType {
-    Index(usize),
-    Scalar(f64),
+#[derive(Debug, Copy, Clone, Variantly)]
+pub enum DataType {
+    #[variantly(rename = "scalar")]
+    Scalar,
     #[variantly(rename = "cscalar")]
-    CScalar(Complex64),
-    Vector(Array1<f64>),
+    CScalar,
+    #[variantly(rename = "vector")]
+    Vector,
     #[variantly(rename = "cvector")]
-    CVector(Array1<Complex64>),
-    Matrix(Array2<f64>),
+    CVector,
+    #[variantly(rename = "matrix")]
+    Matrix,
     #[variantly(rename = "cmatrix")]
-    CMatrix(Array2<Complex64>),
-    Momentum(FourMomentum),
-    #[variantly(rename = "momenta")]
-    MomentumVec(Vec<FourMomentum>),
+    CMatrix,
+    #[variantly(rename = "momentum")]
+    Momentum,
+    #[variantly(rename = "momentum_vector")]
+    MomentumVector,
+}
+
+pub type Scalar64 = f64;
+pub type CScalar64 = Complex64;
+pub type Vector64 = Array1<f64>;
+pub type CVector64 = Array1<Complex64>;
+pub type Matrix64 = Array2<f64>;
+pub type CMatrix64 = Array2<Complex64>;
+pub type Momentum64 = FourMomentum;
+pub type Momenta64 = Vec<FourMomentum>;
+
+#[derive(Default, Debug)]
+pub struct Entry {
+    index: usize,
+    scalar_map: DashMap<String, Scalar64>,
+    cscalar_map: DashMap<String, CScalar64>,
+    vector_map: DashMap<String, Vector64>,
+    cvector_map: DashMap<String, CVector64>,
+    matrix_map: DashMap<String, Matrix64>,
+    cmatrix_map: DashMap<String, CMatrix64>,
+    momentum_map: DashMap<String, Momentum64>,
+    momenta_map: DashMap<String, Momenta64>,
+}
+
+#[derive(Error, Debug)]
+pub enum DatasetError {
+    #[error("No {data_type:?} exists with name {key_name:?}")]
+    TypeError {
+        key_name: String,
+        data_type: DataType,
+    },
+    #[error("{key_name:?} already exists: {key_name:?}@{data_type:?}")]
+    FieldExistsError {
+        key_name: String,
+        data_type: DataType,
+    },
+    #[error("Cannot store a field of size {field_size} in a dataset of size {dataset_size}")]
+    IncompatibleSizesError {
+        dataset_size: usize,
+        field_size: usize,
+    },
+}
+
+impl Entry {
+    pub fn new(index: usize) -> Entry {
+        Entry {
+            index,
+            ..Default::default()
+        }
+    }
+    #[anyinput]
+    pub fn scalar(&self, key: AnyString) -> Result<Scalar64, DatasetError> {
+        match self.scalar_map.get(key) {
+            Some(val) => Ok(*val),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::Scalar,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn cscalar(&self, key: AnyString) -> Result<CScalar64, DatasetError> {
+        match self.cscalar_map.get(key) {
+            Some(val) => Ok(*val),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::CScalar,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn vector(&self, key: AnyString) -> Result<Vector64, DatasetError> {
+        match self.vector_map.get(key) {
+            Some(val) => Ok(val.clone()),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::Vector,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn cvector(&self, key: AnyString) -> Result<CVector64, DatasetError> {
+        match self.cvector_map.get(key) {
+            Some(val) => Ok(val.clone()),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::CVector,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn matrix(&self, key: AnyString) -> Result<Matrix64, DatasetError> {
+        match self.matrix_map.get(key) {
+            Some(val) => Ok(val.clone()),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::Matrix,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn cmatrix(&self, key: AnyString) -> Result<CMatrix64, DatasetError> {
+        match self.cmatrix_map.get(key) {
+            Some(val) => Ok(val.clone()),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::CMatrix,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn momentum(&self, key: AnyString) -> Result<Momentum64, DatasetError> {
+        match self.momentum_map.get(key) {
+            Some(val) => Ok(*val),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::Momentum,
+            }),
+        }
+    }
+
+    #[anyinput]
+    pub fn momenta(&self, key: AnyString) -> Result<Momenta64, DatasetError> {
+        match self.momenta_map.get(key) {
+            Some(val) => Ok(val.clone()),
+            None => Err(DatasetError::TypeError {
+                key_name: key.to_string(),
+                data_type: DataType::MomentumVector,
+            }),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct FieldType {
+    datatype: DataType,
+    prunable: bool,
 }
 
 #[derive(Debug)]
 pub struct Dataset {
-    pub entries: Vec<VarMap>,
-    pub n_entries: usize,
-    prunable: HashMap<String, bool>,
+    pub entries: Vec<Arc<Entry>>,
+    fields: FxHashMap<String, FieldType>,
 }
 
 impl Dataset {
-    pub fn new(n_entries: usize) -> Self {
-        let entries: Vec<VarMap> = (0..n_entries)
-            .map(|i| {
-                let mut entry = HashMap::default();
-                entry.insert("Index".to_string(), FieldType::Index(i));
-                entry
-            })
+    pub fn from_size(size: usize) -> Dataset {
+        let entries = (0..size)
+            .into_iter()
+            .map(|index| Arc::new(Entry::new(index)))
             .collect();
-        let mut prunable = HashMap::default();
-        prunable.insert("Index".to_string(), false);
-        Self {
+        Dataset {
             entries,
-            n_entries,
-            prunable,
+            fields: FxHashMap::default(),
         }
     }
-    pub fn add_field(&mut self, name: &str, field: &[FieldType], prunable: bool) {
-        for (i, entry) in &mut self.entries.iter_mut().enumerate() {
-            entry.insert(name.to_string(), field[i].clone());
+    pub fn from_size_par(size: usize) -> Dataset {
+        let entries = (0..size)
+            .into_par_iter()
+            .map(|index| Arc::new(Entry::new(index)))
+            .collect();
+        Dataset {
+            entries,
+            fields: FxHashMap::default(),
         }
-        self.prunable.insert(name.to_string(), prunable);
     }
 
-    pub fn remove_field(&mut self, name: &str) {
-        for entry in &mut self.entries {
-            entry.remove(name);
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    #[anyinput]
+    pub fn contains_field(&self, name: AnyString) -> bool {
+        self.fields.contains_key(name)
+    }
+
+    #[anyinput]
+    pub fn add_scalar_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<Scalar64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.scalar_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Scalar,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_scalar_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<Scalar64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.scalar_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Scalar,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cscalar_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<CScalar64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cscalar_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CScalar,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cscalar_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<CScalar64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cscalar_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CScalar,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_vector_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<Vector64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.vector_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Vector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_vector_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<Vector64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.vector_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Vector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cvector_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<CVector64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cvector_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CVector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cvector_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<CVector64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cvector_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CVector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_matrix_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<Matrix64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.matrix_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Matrix,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_matrix_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<Matrix64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.matrix_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Matrix,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cmatrix_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<CMatrix64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cmatrix_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CMatrix,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_cmatrix_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<CMatrix64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.cmatrix_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::CMatrix,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_momentum_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<Momentum64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.momentum_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Momentum,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_momentum_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<Momentum64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.momentum_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::Momentum,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_momenta_field(
+        &mut self,
+        name: AnyString,
+        values: Vec<Momenta64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .iter_mut()
+                    .zip(values.into_iter())
+                    .for_each(|(entry, value)| {
+                        entry.momenta_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::MomentumVector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
+        }
+    }
+
+    #[anyinput]
+    pub fn add_momenta_field_par(
+        &mut self,
+        name: AnyString,
+        values: Vec<Momenta64>,
+        prunable: bool,
+    ) -> Result<(), DatasetError> {
+        if self.len() != values.len() {
+            return Err(DatasetError::IncompatibleSizesError {
+                dataset_size: self.len(),
+                field_size: values.len(),
+            });
+        }
+        match self.fields.get(name) {
+            Some(ft) => Err(DatasetError::FieldExistsError {
+                key_name: name.to_string(),
+                data_type: ft.datatype,
+            }),
+            None => {
+                self.entries
+                    .par_iter_mut()
+                    .zip(values.into_par_iter())
+                    .for_each(|(entry, value)| {
+                        entry.momenta_map.insert(name.to_string(), value);
+                    });
+
+                self.fields.insert(
+                    name.to_string(),
+                    FieldType {
+                        datatype: DataType::MomentumVector,
+                        prunable,
+                    },
+                );
+                Ok(())
+            }
         }
     }
 
     pub fn prune(&mut self) {
-        let prunable_entries: Vec<String> = self
-            .prunable
-            .iter()
-            .filter(|&(_, &can_prune)| can_prune)
-            .map(|(key, _)| key.clone())
-            .collect();
-        for prunable_entry in &prunable_entries {
-            self.remove_field(prunable_entry);
+        let mut p_scalar: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cscalar: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_vector: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cvector: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_matrix: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cmatrix: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_momentum: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_momenta: Vec<String> = Vec::with_capacity(self.fields.len());
+        for (name, FieldType { datatype, prunable }) in self.fields.iter() {
+            if *prunable {
+                match datatype {
+                    DataType::Scalar => p_scalar.push(name.to_string()),
+                    DataType::CScalar => p_cscalar.push(name.to_string()),
+                    DataType::Vector => p_vector.push(name.to_string()),
+                    DataType::CVector => p_cvector.push(name.to_string()),
+                    DataType::Matrix => p_matrix.push(name.to_string()),
+                    DataType::CMatrix => p_cmatrix.push(name.to_string()),
+                    DataType::Momentum => p_momentum.push(name.to_string()),
+                    DataType::MomentumVector => p_momenta.push(name.to_string()),
+                }
+            }
         }
+        self.entries.iter_mut().for_each(|entry| {
+            for key in &p_scalar {
+                entry.scalar_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_cscalar {
+                entry.cscalar_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_vector {
+                entry.vector_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_cvector {
+                entry.cvector_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_matrix {
+                entry.matrix_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_cmatrix {
+                entry.cmatrix_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_momentum {
+                entry.momentum_map.remove(key);
+                self.fields.remove(key);
+            }
+            for key in &p_momenta {
+                entry.momenta_map.remove(key);
+                self.fields.remove(key);
+            }
+        })
     }
 
-    pub fn resolve_dependencies(&mut self, variable: Variable, prunable: bool) {
-        // first resolve any subdependencies the variable has (and recurse)
-        if let Some(deps) = variable.dependencies {
-            for dep in deps {
-                if !self.prunable.contains_key(&*dep.name) {
-                    self.resolve_dependencies(dep, true);
+    pub fn prune_par(&mut self) {
+        let mut p_scalar: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cscalar: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_vector: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cvector: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_matrix: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_cmatrix: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_momentum: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_momenta: Vec<String> = Vec::with_capacity(self.fields.len());
+        let mut p_all: Vec<String> = Vec::with_capacity(self.fields.len());
+        for (name, FieldType { datatype, prunable }) in self.fields.iter() {
+            if *prunable {
+                match datatype {
+                    DataType::Scalar => p_scalar.push(name.to_string()),
+                    DataType::CScalar => p_cscalar.push(name.to_string()),
+                    DataType::Vector => p_vector.push(name.to_string()),
+                    DataType::CVector => p_cvector.push(name.to_string()),
+                    DataType::Matrix => p_matrix.push(name.to_string()),
+                    DataType::CMatrix => p_cmatrix.push(name.to_string()),
+                    DataType::Momentum => p_momentum.push(name.to_string()),
+                    DataType::MomentumVector => p_momenta.push(name.to_string()),
                 }
+                p_all.push(name.to_string());
             }
         }
-        // then resolve the variable itself
-        let fn_lock = variable.function.read();
-        if !self.prunable.contains_key(&*variable.name) {
-            #[allow(clippy::redundant_closure)]
-            let field: Vec<FieldType> = self.entries.iter().map(|entry| fn_lock(entry)).collect();
-            self.add_field(&variable.name, &field, prunable);
+        for name in p_all {
+            self.fields.remove(&name);
         }
+        self.entries.par_iter_mut().for_each(|entry| {
+            for key in &p_scalar {
+                entry.scalar_map.remove(key);
+            }
+            for key in &p_cscalar {
+                entry.cscalar_map.remove(key);
+            }
+            for key in &p_vector {
+                entry.vector_map.remove(key);
+            }
+            for key in &p_cvector {
+                entry.cvector_map.remove(key);
+            }
+            for key in &p_matrix {
+                entry.matrix_map.remove(key);
+            }
+            for key in &p_cmatrix {
+                entry.cmatrix_map.remove(key);
+            }
+            for key in &p_momentum {
+                entry.momentum_map.remove(key);
+            }
+            for key in &p_momenta {
+                entry.momenta_map.remove(key);
+            }
+        })
     }
-    pub fn par_resolve_dependencies(&mut self, variable: Variable, prunable: bool) {
-        // first resolve any subdependencies the variable has (and recurse)
-        if let Some(deps) = variable.dependencies {
-            for dep in deps {
-                if !self.prunable.contains_key(&*dep.name) {
-                    self.par_resolve_dependencies(dep, true);
-                }
-            }
-        }
-        // then resolve the variable itself
-        let fn_lock = variable.function.read();
-        if !self.prunable.contains_key(&*variable.name) {
-            #[allow(clippy::redundant_closure)]
-            let field: Vec<FieldType> = self
-                .entries
-                .par_iter()
-                .map(|entry| fn_lock(entry))
-                .collect();
-            self.add_field(&variable.name, &field, prunable);
-        }
+
+    pub fn scalars_to_momentum(
+        e_vec: Vec<Scalar64>,
+        px_vec: Vec<Scalar64>,
+        py_vec: Vec<Scalar64>,
+        pz_vec: Vec<Scalar64>,
+    ) -> Vec<Momentum64> {
+        e_vec
+            .into_iter()
+            .zip(px_vec.into_iter())
+            .zip(py_vec.into_iter())
+            .zip(pz_vec.into_iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(e, px, py, pz))
+            .collect()
+    }
+
+    pub fn scalars_to_momentum_par(
+        e_vec: Vec<Scalar64>,
+        px_vec: Vec<Scalar64>,
+        py_vec: Vec<Scalar64>,
+        pz_vec: Vec<Scalar64>,
+    ) -> Vec<Momentum64> {
+        e_vec
+            .into_par_iter()
+            .zip(px_vec.into_par_iter())
+            .zip(py_vec.into_par_iter())
+            .zip(pz_vec.into_par_iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(e, px, py, pz))
+            .collect()
+    }
+
+    pub fn vectors_to_momenta(
+        es_vec: Vec<Vector64>,
+        pxs_vec: Vec<Vector64>,
+        pys_vec: Vec<Vector64>,
+        pzs_vec: Vec<Vector64>,
+    ) -> Vec<Momenta64> {
+        es_vec
+            .into_iter()
+            .zip(pxs_vec.into_iter())
+            .zip(pys_vec.into_iter())
+            .zip(pzs_vec.into_iter())
+            .map(|(((es, pxs), pys), pzs)| {
+                es.into_iter()
+                    .zip(pxs.into_iter())
+                    .zip(pys.into_iter())
+                    .zip(pzs.into_iter())
+                    .map(|(((e, px), py), pz)| FourMomentum::new(e, px, py, pz))
+                    .collect()
+            })
+            .collect()
+    }
+
+    pub fn vectors_to_momenta_par(
+        es_vec: Vec<Vector64>,
+        pxs_vec: Vec<Vector64>,
+        pys_vec: Vec<Vector64>,
+        pzs_vec: Vec<Vector64>,
+    ) -> Vec<Momenta64> {
+        es_vec
+            .into_par_iter()
+            .zip(pxs_vec.into_par_iter())
+            .zip(pys_vec.into_par_iter())
+            .zip(pzs_vec.into_par_iter())
+            .map(|(((es, pxs), pys), pzs)| {
+                es.into_iter()
+                    .zip(pxs.into_iter())
+                    .zip(pys.into_iter())
+                    .zip(pzs.into_iter())
+                    .map(|(((e, px), py), pz)| FourMomentum::new(e, px, py, pz))
+                    .collect()
+            })
+            .collect()
     }
 }
 
@@ -125,59 +1020,87 @@ pub fn open_parquet(path: &str) -> Result<DataFrame, PolarsError> {
     ParquetReader::new(file).finish()
 }
 
-#[derive(Clone, Copy)]
-pub enum PolarsTypeConversion {
-    F32ToScalar,
-    F64ToScalar,
-    ListToVector,
+#[derive(Clone, Copy, Debug, Variantly)]
+pub enum ReadType {
+    F32,
+    F64,
 }
 
-pub fn extract_field(
-    column_name: &str,
-    column_type: PolarsTypeConversion,
-    df: &DataFrame,
-) -> Result<Vec<FieldType>, PolarsError> {
-    //! Converts a Polars [`polars::prelude::Series`] into a [`Vec<FieldType>`] according to
-    //! a conversion rule.
+#[anyinput]
+pub fn extract_scalar(
+    column_name: AnyString,
+    dataframe: &DataFrame,
+    read_type: ReadType,
+) -> Vec<Scalar64> {
+    //! Extract a Scalar64 field from a [`polars`] [`Dataset`]
     //!
     //! # Panics
-    //!
-    //! Currently will panic if the branch/column name was not found in the
-    //! [`polars::prelude::DataFrame`]
-    //!
-    //! # Errors
-    //!
-    //! Returns [`PolarsError`] if any step in the conversion fails.
-    let series = df
-        .column(column_name)
-        .unwrap_or_else(|_| panic!("No branch {column_name}"));
-    match column_type {
-        PolarsTypeConversion::F32ToScalar => Ok(series
-            .f32()?
+    //! This function will panic if the column name is invalid or if the assumed types are
+    //! incorrect
+    let series = dataframe.column(column_name).unwrap();
+    match read_type {
+        ReadType::F32 => series
+            .f32()
+            .unwrap()
             .to_vec()
             .into_iter()
-            .map(|x| FieldType::Scalar(x.unwrap().into()))
-            .collect::<Vec<FieldType>>()),
-        PolarsTypeConversion::F64ToScalar => Ok(series
-            .f64()?
+            .collect::<Option<Vec<f32>>>()
+            .unwrap()
+            .into_iter()
+            .map(|val| val as Scalar64)
+            .collect::<Vec<Scalar64>>(),
+        ReadType::F64 => series
+            .f64()
+            .unwrap()
             .to_vec()
             .into_iter()
-            .map(|x| FieldType::Scalar(x.unwrap()))
-            .collect::<Vec<FieldType>>()),
-        PolarsTypeConversion::ListToVector => Ok(series
-            .list()?
+            .collect::<Option<Vec<f64>>>()
+            .unwrap()
             .into_iter()
-            .map(|x| {
-                FieldType::Vector(Array1::from_vec(
-                    x.unwrap()
-                        .f32()
-                        .unwrap()
-                        .to_vec()
-                        .into_iter()
-                        .map(|x| x.unwrap().into())
-                        .collect(),
-                ))
+            .collect::<Vec<Scalar64>>(),
+    }
+}
+
+#[anyinput]
+pub fn extract_vector(
+    column_name: AnyString,
+    dataframe: &DataFrame,
+    read_type: ReadType,
+) -> Vec<Vector64> {
+    //! Extract a Vector64 field from a [`polars`] [`Dataset`]
+    //!
+    //! # Panics
+    //! This function will panic if the column name is invalid or if the assumed types are
+    //! incorrect
+    let series = dataframe.column(column_name).unwrap();
+    let vec_of_subseries = series
+        .list()
+        .unwrap()
+        .into_iter()
+        .collect::<Option<Vec<Series>>>()
+        .unwrap();
+    match read_type {
+        ReadType::F32 => vec_of_subseries
+            .into_iter()
+            .map(|subseries| {
+                subseries
+                    .f32()
+                    .unwrap()
+                    .into_iter()
+                    .map(|val| val.unwrap() as f64)
+                    .collect::<Vector64>()
             })
-            .collect::<Vec<FieldType>>()),
+            .collect::<Vec<Vector64>>(),
+        ReadType::F64 => vec_of_subseries
+            .into_iter()
+            .map(|subseries| {
+                subseries
+                    .f64()
+                    .unwrap()
+                    .into_iter()
+                    .map(|val| val.unwrap())
+                    .collect::<Vector64>()
+            })
+            .collect::<Vec<Vector64>>(),
     }
 }

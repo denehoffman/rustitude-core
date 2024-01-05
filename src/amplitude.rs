@@ -1,6 +1,9 @@
+use anyinput::anyinput;
+use dashmap::DashMap;
+use derive_builder::Builder;
+use num_traits::pow::Pow;
 use parking_lot::RwLock;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
 use std::hash::{Hash, Hasher};
 use std::ops::{Add, Div, Mul, Neg, Sub};
 use std::{error::Error, sync::Arc};
@@ -8,7 +11,8 @@ use variantly::Variantly;
 
 use num_complex::Complex64;
 
-use crate::prelude::{Dataset, FieldType};
+use crate::prelude::{Dataset, Entry};
+use crate::variable::Variable;
 
 #[macro_export]
 macro_rules! par {
@@ -35,38 +39,6 @@ macro_rules! pars {
 
 }
 
-#[macro_export]
-macro_rules! var {
-    ($struct_type:ident {$($field:ident : $value:expr),* $(,)?}) => {
-        {$struct_type {
-            $($field: $value),*
-        }}
-    };
-    ($struct_type:path {$($field:ident : $value:expr),* $(,)?}) => {
-        {$struct_type {
-            $($field: $value),*
-        }}
-    };
-}
-
-#[macro_export]
-macro_rules! vars {
-    ($($var:ident {$($field:ident : $value:expr),* $(,)?}),* $(,)?) => {
-        vec![
-            $(
-                var!($var {$($field: $value),*})
-            ),*
-        ]
-    };
-    ($($var:path {$($field:ident : $value:expr),* $(,)?}),* $(,)?) => {
-        vec![
-            $(
-                var!($var {$($field: $value),*})
-            ),*
-        ]
-    };
-}
-
 #[derive(Clone)]
 enum Operation<'a> {
     Add(Amplitude<'a>, Amplitude<'a>),
@@ -81,32 +53,60 @@ enum Operation<'a> {
     Imag(Amplitude<'a>),
 }
 
-pub type ParMap<'a> = HashMap<String, Parameter<'a>>;
-pub type VarMap = HashMap<String, FieldType>;
+pub type ParMap<'a> = DashMap<String, Parameter<'a>>;
 pub type SendableAmpFn =
-    dyn Fn(&ParMap, &VarMap) -> Result<Complex64, Box<dyn Error + Send + Sync>> + Send + Sync;
+    dyn Fn(&ParMap, &Entry) -> Result<Complex64, Box<dyn Error + Send + Sync>> + Send + Sync;
 pub type ArcAmpFn = Arc<RwLock<SendableAmpFn>>;
-pub type SendableVarFn = dyn Fn(&VarMap) -> FieldType + Send + Sync;
-pub type ArcVarFn = Arc<RwLock<SendableVarFn>>;
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, Builder)]
 pub struct Amplitude<'a> {
+    #[builder(setter(custom))]
     pub name: Arc<String>,
+    #[builder(setter(custom))]
     function: Option<ArcAmpFn>,
+    #[builder(setter(custom), default = "Arc::new(RwLock::new(Vec::default()))")]
     internal_parameters: Arc<RwLock<Vec<String>>>,
-    pub external_parameters: Arc<RwLock<HashMap<String, Parameter<'a>>>>,
-    parameter_mappings: Arc<RwLock<HashMap<Parameter<'a>, String>>>,
-    op: Option<Arc<RwLock<Operation<'a>>>>,
+    #[builder(setter(custom), default)]
     dependencies: Option<Vec<Variable>>,
+    #[builder(setter(skip))]
+    pub external_parameters: Arc<DashMap<String, Parameter<'a>>>,
+    #[builder(setter(skip))]
+    parameter_mappings: Arc<DashMap<Parameter<'a>, String>>,
+    #[builder(setter(skip))]
+    op: Option<Arc<RwLock<Operation<'a>>>>,
 }
 
-impl<'a> std::fmt::Debug for Amplitude<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{:?} ->\n\tpars = {:?}\n\tmap = {:?}\n\tdeps = {:?}",
-            self.name, self.internal_parameters, self.parameter_mappings, self.dependencies
-        )
+impl<'a> AmplitudeBuilder<'a> {
+    #[anyinput]
+    pub fn name(&mut self, value: AnyString) -> &mut Self {
+        self.name = Some(Arc::new(value.to_string()));
+        self
+    }
+
+    pub fn function<F>(&mut self, f: F) -> &mut Self
+    where
+        F: 'static
+            + Fn(&ParMap, &Entry) -> Result<Complex64, Box<dyn Error + Send + Sync>>
+            + Sync
+            + Send,
+    {
+        self.function = Some(Some(Arc::new(RwLock::new(f))));
+        self
+    }
+    #[anyinput]
+    pub fn internal_parameters(&mut self, parameter_names: AnyIter<AnyString>) -> &mut Self {
+        self.internal_parameters = Some(Arc::new(RwLock::new(
+            parameter_names
+                .into_iter()
+                .map(|s| s.as_ref().to_string())
+                .collect::<Vec<String>>(),
+        )));
+        self
+    }
+    #[anyinput]
+    pub fn dependencies(&mut self, variables: AnyIter<Variable>) -> &mut Self {
+        self.dependencies = Some(Some(variables.into_iter().collect::<Vec<_>>()));
+        self
     }
 }
 
@@ -136,33 +136,6 @@ impl<'a> Amplitude<'a> {
     //! ```
     //!
 
-    pub fn new<F>(
-        name: &str,
-        function: F,
-        internal_parameters: Option<Vec<&str>>,
-        dependencies: Option<Vec<Variable>>,
-    ) -> Self
-    where
-        F: 'static
-            + Fn(&ParMap, &VarMap) -> Result<Complex64, Box<dyn Error + Send + Sync>>
-            + Sync
-            + Send,
-    {
-        let internal_parameters: Arc<RwLock<Vec<String>>> = match internal_parameters {
-            Some(pars) => Arc::new(RwLock::new(
-                pars.iter().map(std::string::ToString::to_string).collect(),
-            )),
-            None => Arc::new(RwLock::new(Vec::default())),
-        };
-        Amplitude {
-            name: Arc::new(name.to_string()),
-            function: Some(Arc::new(RwLock::new(function))),
-            dependencies,
-            internal_parameters,
-            ..Default::default()
-        }
-    }
-
     /// Assign an external parameter to an internal name.
     ///
     /// # Panics
@@ -173,10 +146,8 @@ impl<'a> Amplitude<'a> {
         let internal_pars = self.internal_parameters.read();
         if internal_pars.contains(&internal_name.to_string()) {
             self.parameter_mappings
-                .write()
                 .insert(*external_par, internal_name.to_string());
             self.external_parameters
-                .write()
                 .insert(external_par.name.to_string(), *external_par);
         } else {
             panic!("Name not found!");
@@ -186,14 +157,14 @@ impl<'a> Amplitude<'a> {
     fn _evaluate(
         &self,
         pars: &ParMap,
-        vars: &VarMap,
+        vars: &Entry,
     ) -> Result<Complex64, Box<dyn Error + Send + Sync>> {
         let internal_pars = self
             .parameter_mappings
-            .read()
             .iter()
-            .filter_map(|(external, internal)| {
-                pars.get(external.name).map(|par| (internal.clone(), *par))
+            .filter_map(|entry| {
+                pars.get(entry.key().name)
+                    .map(|par| (entry.value().clone(), *par))
             })
             .collect();
         if let Some(ref func_arc) = self.function {
@@ -214,7 +185,7 @@ impl<'a> Amplitude<'a> {
     pub fn evaluate(
         &self,
         pars: &ParMap,
-        vars: &VarMap,
+        vars: &Entry,
     ) -> Result<Complex64, Box<dyn Error + Send + Sync>> {
         if let Some(op) = &self.op {
             let op_lock = op.read();
@@ -254,80 +225,71 @@ impl<'a> Amplitude<'a> {
             self._evaluate(pars, vars)
         }
     }
-    pub fn resolve_dependencies(&self, dataset: &mut Dataset) {
-        if let Some(deps) = &self.dependencies {
-            for dep in deps {
-                dataset.resolve_dependencies(dep.clone(), false);
-            }
-        }
-    }
-    pub fn par_resolve_dependencies(&self, dataset: &mut Dataset) {
-        if let Some(deps) = &self.dependencies {
-            for dep in deps {
-                dataset.par_resolve_dependencies(dep.clone(), false);
-            }
-        }
-    }
-    /// Note that `par_names` is, in general, not the same length as `par_values`. This is because
-    /// it contains a single name for each complex variable while `par_values` will contain two
-    /// `f64`s, one each for the real and imaginary part.
-    ///
-    /// # Panics
-    ///
-    /// Panics if a name in `par_names` is not found in the list of external parameter
-    /// names for the amplitude.
+
     pub fn load_params(&self, par_vals: &[f64], par_names: &[&str]) {
+        //! Note that `par_names` is, in general, not the same length as `par_values`. This is because
+        //! it contains a single name for each complex variable while `par_values` will contain two
+        //! `f64`s, one each for the real and imaginary part.
+        //!
+        //! # Panics
+        //!
+        //! Panics if a name in `par_names` is not found in the list of external parameter
+        //! names for the amplitude.
         let mut i: usize = 0;
-        let mut e_pars_lock = self.external_parameters.write();
         for e_name in par_names {
-            if e_pars_lock.get_mut(*e_name).unwrap().value.is_scalar() {
-                e_pars_lock.get_mut(*e_name).unwrap().value = ParameterValue::Scalar(par_vals[i]);
+            if self
+                .external_parameters
+                .get_mut(*e_name)
+                .unwrap()
+                .value
+                .is_scalar()
+            {
+                self.external_parameters.get_mut(*e_name).unwrap().value =
+                    ParameterValue::Scalar(par_vals[i]);
                 i += 1;
             } else {
-                e_pars_lock.get_mut(*e_name).unwrap().value =
+                self.external_parameters.get_mut(*e_name).unwrap().value =
                     ParameterValue::CScalar(Complex64::new(par_vals[i], par_vals[i + 1]));
                 i += 2;
             }
         }
     }
     pub fn evaluate_on(&self, dataset: &Dataset) -> Vec<Complex64> {
-        let parameter_map: ParMap = self.external_parameters.read().clone();
         dataset
             .entries
             .iter()
-            .filter_map(|entry| self.evaluate(&parameter_map, entry).ok())
+            .filter_map(|entry| self.evaluate(&self.external_parameters, entry).ok())
             .collect()
     }
 
     pub fn par_evaluate_on(&self, dataset: &Dataset) -> Vec<Complex64> {
-        let parameter_map: ParMap = self.external_parameters.read().clone();
         dataset
             .entries
             .par_iter()
-            .filter_map(|entry| self.evaluate(&parameter_map, entry).ok())
+            .filter_map(|entry| self.evaluate(&self.external_parameters, entry).ok())
             .collect()
     }
     pub fn sqrt(&self) -> Amplitude<'a> {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Sqrt(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters.clone(),
+            dependencies: self.dependencies.clone(),
             ..Default::default()
         }
     }
     pub fn norm_sqr(&self) -> Amplitude<'a> {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::NormSquare(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters.clone(),
+            dependencies: self.dependencies.clone(),
             ..Default::default()
         }
     }
     pub fn re(&self) -> Amplitude<'a> {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Real(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters.clone(),
+            dependencies: self.dependencies.clone(),
             ..Default::default()
         }
     }
@@ -337,8 +299,8 @@ impl<'a> Amplitude<'a> {
     pub fn im(&self) -> Amplitude<'a> {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Imag(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters.clone(),
+            dependencies: self.dependencies.clone(),
             ..Default::default()
         }
     }
@@ -351,50 +313,48 @@ impl<'a> Add for Amplitude<'a> {
     type Output = Amplitude<'a>;
 
     fn add(self, rhs: Amplitude<'a>) -> Self::Output {
-        let external_parameters = Arc::new(RwLock::new(
-            self.external_parameters
-                .read()
-                .clone()
-                .into_iter()
-                .chain(rhs.external_parameters.read().clone())
-                .collect(),
-        ));
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
         let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
             (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
             (Some(deps), None) | (None, Some(deps)) => Some(deps),
             (None, None) => None,
         };
-
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Add(self, rhs)))),
-            external_parameters,
+            external_parameters: Arc::new(external_parameters),
             dependencies,
             ..Default::default()
         }
     }
 }
-
 impl<'a> Add for &'a Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn add(self, rhs: Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Add(
                 self.clone(),
                 rhs.clone(),
             )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -402,24 +362,22 @@ impl<'a> Add for &'a Amplitude<'a> {
 impl<'a> Add<&'a Amplitude<'a>> for Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn add(self, rhs: &'a Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Add(
-                self.clone(),
-                rhs.clone(),
-            )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            op: Some(Arc::new(RwLock::new(Operation::Add(self, rhs.clone())))),
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -429,53 +387,48 @@ impl<'a> Sub for Amplitude<'a> {
     type Output = Amplitude<'a>;
 
     fn sub(self, rhs: Amplitude<'a>) -> Self::Output {
-        let external_parameters = Arc::new(RwLock::new(
-            self.external_parameters
-                .read()
-                .clone()
-                .into_iter()
-                .chain(rhs.external_parameters.read().clone())
-                .collect(),
-        ));
-
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
         let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
             (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
             (Some(deps), None) | (None, Some(deps)) => Some(deps),
             (None, None) => None,
         };
-
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Sub(self, rhs)))),
-            external_parameters,
+            external_parameters: Arc::new(external_parameters),
             dependencies,
             ..Default::default()
         }
     }
 }
-
 impl<'a> Sub for &'a Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn sub(self, rhs: Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Sub(
                 self.clone(),
                 rhs.clone(),
             )))),
-
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -483,26 +436,22 @@ impl<'a> Sub for &'a Amplitude<'a> {
 impl<'a> Sub<&'a Amplitude<'a>> for Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn sub(self, rhs: &'a Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Sub(
-                self.clone(),
-                rhs.clone(),
-            )))),
-
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            op: Some(Arc::new(RwLock::new(Operation::Sub(self, rhs.clone())))),
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -512,51 +461,48 @@ impl<'a> Mul for Amplitude<'a> {
     type Output = Amplitude<'a>;
 
     fn mul(self, rhs: Amplitude<'a>) -> Self::Output {
-        let external_parameters = Arc::new(RwLock::new(
-            self.external_parameters
-                .read()
-                .clone()
-                .into_iter()
-                .chain(rhs.external_parameters.read().clone())
-                .collect(),
-        ));
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
         let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
             (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
             (Some(deps), None) | (None, Some(deps)) => Some(deps),
             (None, None) => None,
         };
-
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Mul(self, rhs)))),
-            external_parameters,
+            external_parameters: Arc::new(external_parameters),
             dependencies,
             ..Default::default()
         }
     }
 }
-
 impl<'a> Mul for &'a Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn mul(self, rhs: Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Mul(
                 self.clone(),
                 rhs.clone(),
             )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -564,50 +510,46 @@ impl<'a> Mul for &'a Amplitude<'a> {
 impl<'a> Mul<&'a Amplitude<'a>> for Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn mul(self, rhs: &'a Self) -> Self::Output {
-        Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Mul(
-                self.clone(),
-                rhs.clone(),
-            )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
-            ..Default::default()
-        }
-    }
-}
-impl<'a> Div for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-
-    fn div(self, rhs: Amplitude<'a>) -> Self::Output {
-        let external_parameters = Arc::new(RwLock::new(
-            self.external_parameters
-                .read()
-                .clone()
-                .into_iter()
-                .chain(rhs.external_parameters.read().clone())
-                .collect(),
-        ));
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
         let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
             (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
             (Some(deps), None) | (None, Some(deps)) => Some(deps),
             (None, None) => None,
         };
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Mul(self, rhs.clone())))),
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
+            ..Default::default()
+        }
+    }
+}
 
+impl<'a> Div for Amplitude<'a> {
+    type Output = Amplitude<'a>;
+
+    fn div(self, rhs: Amplitude<'a>) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Div(self, rhs)))),
-            external_parameters,
+            external_parameters: Arc::new(external_parameters),
             dependencies,
             ..Default::default()
         }
@@ -616,25 +558,25 @@ impl<'a> Div for Amplitude<'a> {
 impl<'a> Div for &'a Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn div(self, rhs: Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Div(
                 self.clone(),
                 rhs.clone(),
             )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -642,104 +584,96 @@ impl<'a> Div for &'a Amplitude<'a> {
 impl<'a> Div<&'a Amplitude<'a>> for Amplitude<'a> {
     type Output = Amplitude<'a>;
     fn div(self, rhs: &'a Self) -> Self::Output {
-        Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Div(
-                self.clone(),
-                rhs.clone(),
-            )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
-            ..Default::default()
-        }
-    }
-}
-
-impl<'a> num_traits::pow::Pow<Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-
-    fn pow(self, rhs: Amplitude<'a>) -> Self::Output {
-        let external_parameters = Arc::new(RwLock::new(
-            self.external_parameters
-                .read()
-                .clone()
-                .into_iter()
-                .chain(rhs.external_parameters.read().clone())
-                .collect(),
-        ));
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
         let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
             (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
             (Some(deps), None) | (None, Some(deps)) => Some(deps),
             (None, None) => None,
         };
-
         Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Pow(self, rhs)))),
-            external_parameters,
+            op: Some(Arc::new(RwLock::new(Operation::Div(self, rhs.clone())))),
+            external_parameters: Arc::new(external_parameters),
             dependencies,
             ..Default::default()
         }
     }
 }
-impl<'a> num_traits::pow::Pow<Self> for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn pow(self, rhs: Self) -> Self::Output {
-        Amplitude {
-            op: Some(Arc::new(RwLock::new(Operation::Pow(
-                self.clone(),
-                rhs.clone(),
-            )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
 
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+impl<'a> Pow<Amplitude<'a>> for Amplitude<'a> {
+    type Output = Amplitude<'a>;
+
+    fn pow(self, rhs: Amplitude<'a>) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Pow(self, rhs)))),
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
 }
-impl<'a> num_traits::pow::Pow<&'a Amplitude<'a>> for Amplitude<'a> {
+impl<'a> Pow<Self> for &'a Amplitude<'a> {
     type Output = Amplitude<'a>;
-    fn pow(self, rhs: &'a Self) -> Self::Output {
+    fn pow(self, rhs: Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Pow(
                 self.clone(),
                 rhs.clone(),
             )))),
-            external_parameters: Arc::new(RwLock::new(
-                self.external_parameters
-                    .read()
-                    .clone()
-                    .into_iter()
-                    .chain(rhs.external_parameters.read().clone())
-                    .collect(),
-            )),
-
-            dependencies: match (self.clone().dependencies, rhs.clone().dependencies) {
-                (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
-                (Some(deps), None) | (None, Some(deps)) => Some(deps),
-                (None, None) => None,
-            },
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
+            ..Default::default()
+        }
+    }
+}
+impl<'a> Pow<&'a Amplitude<'a>> for Amplitude<'a> {
+    type Output = Amplitude<'a>;
+    fn pow(self, rhs: &'a Self) -> Self::Output {
+        let external_parameters = DashMap::new();
+        self.external_parameters
+            .iter()
+            .chain(rhs.external_parameters.iter())
+            .for_each(|entry| {
+                external_parameters.insert(entry.key().to_string(), *entry.value());
+            });
+        let dependencies = match (self.dependencies.clone(), rhs.dependencies.clone()) {
+            (Some(deps_a), Some(deps_b)) => Some(deps_a.into_iter().chain(deps_b).collect()),
+            (Some(deps), None) | (None, Some(deps)) => Some(deps),
+            (None, None) => None,
+        };
+        Amplitude {
+            op: Some(Arc::new(RwLock::new(Operation::Pow(self, rhs.clone())))),
+            external_parameters: Arc::new(external_parameters),
+            dependencies,
             ..Default::default()
         }
     }
@@ -750,8 +684,8 @@ impl<'a> Neg for &'a Amplitude<'a> {
     fn neg(self) -> Self::Output {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Neg(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters.clone(),
+            dependencies: self.dependencies.clone(),
             ..Default::default()
         }
     }
@@ -761,8 +695,8 @@ impl<'a> Neg for Amplitude<'a> {
     fn neg(self) -> Self::Output {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Neg(self.clone())))),
-            external_parameters: self.clone().external_parameters,
-            dependencies: self.clone().dependencies,
+            external_parameters: self.external_parameters,
+            dependencies: self.dependencies,
             ..Default::default()
         }
     }
@@ -770,17 +704,24 @@ impl<'a> Neg for Amplitude<'a> {
 
 impl<'a> From<f64> for Amplitude<'a> {
     fn from(value: f64) -> Self {
-        Amplitude::new(&value.to_string(), move |_, _| Ok(value.into()), None, None)
+        AmplitudeBuilder::default()
+            .name(value.to_string())
+            .function(move |_, _| Ok(value.into()))
+            .build()
+            .unwrap()
     }
 }
-
 impl<'a> From<Complex64> for Amplitude<'a> {
     fn from(value: Complex64) -> Self {
-        Amplitude::new(&value.to_string(), move |_, _| Ok(value), None, None)
+        AmplitudeBuilder::default()
+            .name(value.to_string())
+            .function(move |_, _| Ok(value))
+            .build()
+            .unwrap()
     }
 }
 
-pub trait AmplitudeBuilder<'a> {
+pub trait IntoAmplitude<'a> {
     fn into_amplitude(self) -> Amplitude<'a>;
     fn assign(self, parameters: &[Parameter<'a>]) -> Amplitude<'a>
     where
@@ -831,82 +772,16 @@ impl<'a> Parameter<'a> {
 
 impl<'a> From<Parameter<'a>> for Amplitude<'a> {
     fn from(par: Parameter<'a>) -> Self {
-        Amplitude::new(
-            par.name,
-            |pars: &ParMap, _vars: &VarMap| {
-                Ok(match pars["parameter"].value {
+        AmplitudeBuilder::default()
+            .name(par.name)
+            .function(|pars: &ParMap, _vars: &Entry| {
+                Ok(match pars.get("parameter").unwrap().value {
                     ParameterValue::Scalar(val) => Complex64::from(val),
                     ParameterValue::CScalar(val) => val,
                 })
-            },
-            Some(vec!["parameter"]),
-            None,
-        )
-    }
-}
-
-#[derive(Clone)]
-pub struct Variable {
-    pub name: Arc<String>,
-    pub function: ArcVarFn,
-    pub dependencies: Option<Vec<Variable>>,
-}
-
-impl std::fmt::Debug for Variable {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "VAR({:?} -> {:?})", self.name, self.dependencies)
-    }
-}
-
-impl Variable {
-    pub fn new<F>(name: &str, function: F, dependencies: Option<Vec<Variable>>) -> Self
-    where
-        F: 'static + Fn(&VarMap) -> FieldType + Sync + Send,
-    {
-        Variable {
-            name: Arc::new(name.to_string()),
-            function: Arc::new(RwLock::new(function)),
-            dependencies,
-        }
-    }
-}
-
-pub trait VariableBuilder {
-    fn into_variable(self) -> Variable;
-}
-
-pub struct Branch(String);
-
-impl Branch {
-    pub fn new(branch_name: &str) -> Branch {
-        Branch(branch_name.to_string())
-    }
-}
-
-impl<'a> AmplitudeBuilder<'a> for Branch {
-    fn into_amplitude(self) -> Amplitude<'a> {
-        //! Extracts a branch by name/type into an [`Amplitude`].
-        //!
-        //! This is particularly useful for things where you want to use a branch of your data file
-        //! as its own variable without making copies or dependencies.
-        //!
-        //! # Panics
-        //!
-        //! This will certainly panic if you try to convert branches which have field types other
-        //! than [`FieldType::Scalar`] or [`FieldType::CScalar`] because there is no way to
-        //! unambiguously convert these to [`Complex64`]. This will also panic if the branch isn't
-        //! found by name in the [`Dataset`].
-        Amplitude::new(
-            &self.0.clone(),
-            move |_: &ParMap, vars: &VarMap| match vars[&self.0] {
-                FieldType::Scalar(val) => Ok(val.into()),
-                FieldType::CScalar(val) => Ok(val),
-                _ => {
-                    panic!("Cannot convert FieldTypes other than Scalar and CScalar to amplitudes")
-                }
-            },
-            None,
-            None,
-        )
+            })
+            .internal_parameters(["parameter"])
+            .build()
+            .unwrap()
     }
 }

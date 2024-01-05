@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use ndarray::{array, Array1, Array2};
 use std::ops::{Add, Sub};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub struct FourMomentum {
     pub e: f64,
     pub px: f64,
