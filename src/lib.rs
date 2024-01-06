@@ -17,8 +17,8 @@ pub mod prelude {
         CMatrixVariable, CMatrixVariableBuilder, CScalarVariable, CScalarVariableBuilder,
         CVectorVariable, CVectorVariableBuilder, IntoVariable, MatrixVariable,
         MatrixVariableBuilder, MomentaVariable, MomentaVariableBuilder, MomentumVariable,
-        MomentumVariableBuilder, ScalarVariable, ScalarVariableBuilder, Variable, VectorVariable,
-        VectorVariableBuilder,
+        MomentumVariableBuilder, Resolve, ScalarVariable, ScalarVariableBuilder, Variable,
+        VectorVariable, VectorVariableBuilder,
     };
     pub use crate::{cpar, par, pars};
 }
