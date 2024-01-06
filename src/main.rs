@@ -12,8 +12,7 @@ use rustitude::gluex::{self, open_gluex};
 use rustitude::prelude::*;
 
 fn main() {
-    let dataset = open_gluex("data.parquet", true).unwrap();
-    dbg!(dataset);
+    let mut dataset = open_gluex("data_pol.parquet", true).unwrap();
     let particles = gluex::ParticleInfo {
         recoil_index: 0,
         daughter_index: 1,
@@ -23,7 +22,12 @@ fn main() {
         l: 0,
         m: 0,
         particle_info: particles,
-    };
+    }
+    .into_amplitude();
+
+    let time = Instant::now();
+    ylm.resolve_par(&mut dataset).unwrap();
+    println!("{:?}", time.elapsed());
 }
 
 // #[allow(clippy::too_many_lines)]
