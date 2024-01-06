@@ -11,7 +11,8 @@ use variantly::Variantly;
 
 use num_complex::Complex64;
 
-use crate::prelude::{Dataset, Entry};
+use crate::dataset::DatasetError;
+use crate::prelude::{Dataset, Entry, Resolve};
 use crate::variable::Variable;
 
 #[macro_export]
@@ -67,7 +68,7 @@ pub struct Amplitude<'a> {
     #[builder(setter(custom), default = "Arc::new(RwLock::new(Vec::default()))")]
     internal_parameters: Arc<RwLock<Vec<String>>>,
     #[builder(setter(custom), default)]
-    dependencies: Option<Vec<Variable>>,
+    pub dependencies: Option<Vec<Variable>>,
     #[builder(setter(skip))]
     pub external_parameters: Arc<DashMap<String, Parameter<'a>>>,
     #[builder(setter(skip))]
@@ -253,6 +254,41 @@ impl<'a> Amplitude<'a> {
                 i += 2;
             }
         }
+    }
+
+    pub fn resolve(&self, dataset: &mut Dataset) -> Result<(), DatasetError> {
+        if let Some(deps) = &self.dependencies {
+            for dep in deps {
+                match dep {
+                    Variable::Scalar(var) => var.resolve(dataset, false)?,
+                    Variable::CScalar(var) => var.resolve(dataset, false)?,
+                    Variable::Vector(var) => var.resolve(dataset, false)?,
+                    Variable::CVector(var) => var.resolve(dataset, false)?,
+                    Variable::Matrix(var) => var.resolve(dataset, false)?,
+                    Variable::CMatrix(var) => var.resolve(dataset, false)?,
+                    Variable::Momentum(var) => var.resolve(dataset, false)?,
+                    Variable::Momenta(var) => var.resolve(dataset, false)?,
+                };
+            }
+        }
+        Ok(())
+    }
+    pub fn resolve_par(&self, dataset: &mut Dataset) -> Result<(), DatasetError> {
+        if let Some(deps) = &self.dependencies {
+            for dep in deps {
+                match dep {
+                    Variable::Scalar(var) => var.resolve_par(dataset, false)?,
+                    Variable::CScalar(var) => var.resolve_par(dataset, false)?,
+                    Variable::Vector(var) => var.resolve_par(dataset, false)?,
+                    Variable::CVector(var) => var.resolve_par(dataset, false)?,
+                    Variable::Matrix(var) => var.resolve_par(dataset, false)?,
+                    Variable::CMatrix(var) => var.resolve_par(dataset, false)?,
+                    Variable::Momentum(var) => var.resolve_par(dataset, false)?,
+                    Variable::Momenta(var) => var.resolve_par(dataset, false)?,
+                };
+            }
+        }
+        Ok(())
     }
     pub fn evaluate_on(&self, dataset: &Dataset) -> Vec<Complex64> {
         dataset
