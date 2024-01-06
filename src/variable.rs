@@ -58,17 +58,17 @@ pub struct ScalarVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToScalar64>>,
+    function: Arc<RwLock<ResolveToScalar64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl ScalarVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> Scalar64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -116,7 +116,7 @@ impl Resolve for ScalarVariable {
         let field: Vec<Scalar64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_scalar_field(self.name.clone(), field, prunable)
     }
@@ -141,7 +141,7 @@ impl Resolve for ScalarVariable {
         let field: Vec<Scalar64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_scalar_field_par(self.name.clone(), field, prunable)
     }
@@ -152,17 +152,17 @@ pub struct CScalarVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToCScalar64>>,
+    function: Arc<RwLock<ResolveToCScalar64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl CScalarVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> CScalar64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -210,7 +210,7 @@ impl Resolve for CScalarVariable {
         let field: Vec<CScalar64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cscalar_field(self.name.clone(), field, prunable)
     }
@@ -235,7 +235,7 @@ impl Resolve for CScalarVariable {
         let field: Vec<CScalar64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cscalar_field_par(self.name.clone(), field, prunable)
     }
@@ -246,17 +246,17 @@ pub struct VectorVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToVector64>>,
+    function: Arc<RwLock<ResolveToVector64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl VectorVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> Vector64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -291,7 +291,7 @@ impl Resolve for VectorVariable {
         let field: Vec<Vector64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_vector_field(self.name.clone(), field, prunable)
     }
@@ -316,7 +316,7 @@ impl Resolve for VectorVariable {
         let field: Vec<Vector64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_vector_field_par(self.name.clone(), field, prunable)
     }
@@ -327,17 +327,17 @@ pub struct CVectorVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToCVector64>>,
+    function: Arc<RwLock<ResolveToCVector64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl CVectorVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> CVector64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -372,7 +372,7 @@ impl Resolve for CVectorVariable {
         let field: Vec<CVector64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cvector_field(self.name.clone(), field, prunable)
     }
@@ -397,7 +397,7 @@ impl Resolve for CVectorVariable {
         let field: Vec<CVector64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cvector_field_par(self.name.clone(), field, prunable)
     }
@@ -408,17 +408,17 @@ pub struct MatrixVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToMatrix64>>,
+    function: Arc<RwLock<ResolveToMatrix64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl MatrixVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> Matrix64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -453,7 +453,7 @@ impl Resolve for MatrixVariable {
         let field: Vec<Matrix64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_matrix_field(self.name.clone(), field, prunable)
     }
@@ -478,7 +478,7 @@ impl Resolve for MatrixVariable {
         let field: Vec<Matrix64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_matrix_field_par(self.name.clone(), field, prunable)
     }
@@ -489,17 +489,17 @@ pub struct CMatrixVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToCMatrix64>>,
+    function: Arc<RwLock<ResolveToCMatrix64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl CMatrixVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> CMatrix64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -534,7 +534,7 @@ impl Resolve for CMatrixVariable {
         let field: Vec<CMatrix64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cmatrix_field(self.name.clone(), field, prunable)
     }
@@ -559,7 +559,7 @@ impl Resolve for CMatrixVariable {
         let field: Vec<CMatrix64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_cmatrix_field_par(self.name.clone(), field, prunable)
     }
@@ -570,17 +570,17 @@ pub struct MomentumVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToMomentum64>>,
+    function: Arc<RwLock<ResolveToMomentum64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl MomentumVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> Momentum64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -615,7 +615,7 @@ impl Resolve for MomentumVariable {
         let field: Vec<Momentum64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_momentum_field(self.name.clone(), field, prunable)
     }
@@ -640,7 +640,7 @@ impl Resolve for MomentumVariable {
         let field: Vec<Momentum64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_momentum_field_par(self.name.clone(), field, prunable)
     }
@@ -650,17 +650,17 @@ pub struct MomentaVariable {
     #[builder(setter(into))]
     pub name: String,
     #[builder(setter(custom))]
-    resolver: Arc<RwLock<ResolveToMomenta64>>,
+    function: Arc<RwLock<ResolveToMomenta64>>,
     #[builder(setter(custom), default)]
     dependencies: Option<Arc<RwLock<Vec<Variable>>>>,
 }
 
 impl MomentaVariableBuilder {
-    pub fn resolver<F>(&mut self, f: F) -> &mut Self
+    pub fn function<F>(&mut self, f: F) -> &mut Self
     where
         F: 'static + Fn(&Entry) -> Momenta64 + Send + Sync,
     {
-        self.resolver = Some(Arc::new(RwLock::new(f)));
+        self.function = Some(Arc::new(RwLock::new(f)));
         self
     }
 
@@ -695,7 +695,7 @@ impl Resolve for MomentaVariable {
         let field: Vec<Momenta64> = dataset
             .entries
             .iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_momenta_field(self.name.clone(), field, prunable)
     }
@@ -720,7 +720,7 @@ impl Resolve for MomentaVariable {
         let field: Vec<Momenta64> = dataset
             .entries
             .par_iter()
-            .map(|entry| self.resolver.read()(entry))
+            .map(|entry| self.function.read()(entry))
             .collect();
         dataset.add_momenta_field_par(self.name.clone(), field, prunable)
     }

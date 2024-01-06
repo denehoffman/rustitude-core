@@ -8,7 +8,9 @@ use ndarray::{Array1, Array2};
 use num_complex::Complex64;
 use rustc_hash::FxHashMap;
 
-use crate::four_momentum::FourMomentum;
+use crate::{
+    four_momentum::FourMomentum,
+};
 use anyinput::anyinput;
 use thiserror::Error;
 use variantly::Variantly;
@@ -176,7 +178,7 @@ pub struct FieldType {
     prunable: bool,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Dataset {
     pub entries: Vec<Arc<Entry>>,
     fields: FxHashMap<String, FieldType>,

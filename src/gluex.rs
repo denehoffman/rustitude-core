@@ -80,7 +80,7 @@ impl IntoVariable for Ylm {
         Variable::CScalar(
             CScalarVariableBuilder::default()
                 .name(&format!("Y {} {}", self.l, self.m))
-                .resolver(move |entry: &Entry| {
+                .function(move |entry: &Entry| {
                     let beam_p4_lab = entry.momentum("Beam P4").unwrap();
                     let fs_p4s_lab = entry.momenta("Final State P4").unwrap();
                     let fs_p4_lab = &fs_p4s_lab.iter().sum();
