@@ -298,7 +298,7 @@ impl<'a> Amplitude<'a> {
             .collect()
     }
 
-    pub fn par_evaluate_on(&self, dataset: &Dataset) -> Vec<Complex64> {
+    pub fn evaluate_on_par(&self, dataset: &Dataset) -> Vec<Complex64> {
         dataset
             .entries
             .par_iter()
