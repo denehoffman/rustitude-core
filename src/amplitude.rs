@@ -41,26 +41,26 @@ macro_rules! pars {
 }
 
 #[derive(Clone)]
-enum Operation<'a> {
-    Add(Amplitude<'a>, Amplitude<'a>),
-    Sub(Amplitude<'a>, Amplitude<'a>),
-    Mul(Amplitude<'a>, Amplitude<'a>),
-    Div(Amplitude<'a>, Amplitude<'a>),
-    Pow(Amplitude<'a>, Amplitude<'a>),
-    Neg(Amplitude<'a>),
-    Sqrt(Amplitude<'a>),
-    NormSquare(Amplitude<'a>),
-    Real(Amplitude<'a>),
-    Imag(Amplitude<'a>),
+enum Operation {
+    Add(Amplitude, Amplitude),
+    Sub(Amplitude, Amplitude),
+    Mul(Amplitude, Amplitude),
+    Div(Amplitude, Amplitude),
+    Pow(Amplitude, Amplitude),
+    Neg(Amplitude),
+    Sqrt(Amplitude),
+    NormSquare(Amplitude),
+    Real(Amplitude),
+    Imag(Amplitude),
 }
 
-pub type ParMap<'a> = DashMap<String, Parameter<'a>>;
+pub type ParMap = DashMap<String, Parameter>;
 pub type SendableAmpFn =
     dyn Fn(&ParMap, &Entry) -> Result<Complex64, Box<dyn Error + Send + Sync>> + Send + Sync;
 pub type ArcAmpFn = Arc<RwLock<SendableAmpFn>>;
 
 #[derive(Default, Clone, Builder)]
-pub struct Amplitude<'a> {
+pub struct Amplitude {
     #[builder(setter(custom))]
     pub name: Arc<String>,
     #[builder(setter(custom))]
@@ -70,14 +70,14 @@ pub struct Amplitude<'a> {
     #[builder(setter(custom), default)]
     pub dependencies: Option<Vec<Variable>>,
     #[builder(setter(skip))]
-    pub external_parameters: Arc<DashMap<String, Parameter<'a>>>,
+    pub external_parameters: Arc<DashMap<String, Parameter>>,
     #[builder(setter(skip))]
-    parameter_mappings: Arc<DashMap<Parameter<'a>, String>>,
+    parameter_mappings: Arc<DashMap<Parameter, String>>,
     #[builder(setter(skip))]
-    op: Option<Arc<RwLock<Operation<'a>>>>,
+    op: Option<Arc<RwLock<Operation>>>,
 }
 
-impl<'a> AmplitudeBuilder<'a> {
+impl AmplitudeBuilder {
     #[anyinput]
     pub fn name(&mut self, value: AnyString) -> &mut Self {
         self.name = Some(Arc::new(value.to_string()));
@@ -111,7 +111,7 @@ impl<'a> AmplitudeBuilder<'a> {
     }
 }
 
-impl<'a> Amplitude<'a> {
+impl Amplitude {
     //! The [`Amplitude`] struct is at the core of this package. It holds a function which takes
     //! [`ParMap`] and a [`VarMap`] and returns a [`Result`] containing a [`Complex64`].
     //!
@@ -143,7 +143,7 @@ impl<'a> Amplitude<'a> {
     ///
     /// This function panics if the internal name is not in the list of internal names provided
     /// by the amplitude.
-    pub fn assign(&self, external_par: &Parameter<'a>, internal_name: &str) {
+    pub fn assign(&self, external_par: &Parameter, internal_name: &str) {
         let internal_pars = self.internal_parameters.read();
         if internal_pars.contains(&internal_name.to_string()) {
             self.parameter_mappings
@@ -153,6 +153,14 @@ impl<'a> Amplitude<'a> {
         } else {
             panic!("Name not found!");
         }
+    }
+
+    fn with(self, parameters: &[Parameter]) -> Amplitude {
+        let internal_names = self.internal_parameters.read().clone();
+        for (e_par, i_name) in parameters.iter().zip(internal_names.iter()) {
+            self.assign(e_par, i_name);
+        }
+        self
     }
 
     fn _evaluate(
@@ -294,7 +302,7 @@ impl<'a> Amplitude<'a> {
         dataset
             .entries
             .iter()
-            .filter_map(|entry| self.evaluate(&self.external_parameters, entry).ok())
+            .filter_map(|entry| self.evaluate(&self.external_parameters, &entry.read()).ok())
             .collect()
     }
 
@@ -302,10 +310,10 @@ impl<'a> Amplitude<'a> {
         dataset
             .entries
             .par_iter()
-            .filter_map(|entry| self.evaluate(&self.external_parameters, entry).ok())
+            .filter_map(|entry| self.evaluate(&self.external_parameters, &entry.read()).ok())
             .collect()
     }
-    pub fn sqrt(&self) -> Amplitude<'a> {
+    pub fn sqrt(&self) -> Amplitude {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Sqrt(self.clone())))),
             external_parameters: self.external_parameters.clone(),
@@ -313,7 +321,7 @@ impl<'a> Amplitude<'a> {
             ..Default::default()
         }
     }
-    pub fn norm_sqr(&self) -> Amplitude<'a> {
+    pub fn norm_sqr(&self) -> Amplitude {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::NormSquare(self.clone())))),
             external_parameters: self.external_parameters.clone(),
@@ -321,7 +329,7 @@ impl<'a> Amplitude<'a> {
             ..Default::default()
         }
     }
-    pub fn re(&self) -> Amplitude<'a> {
+    pub fn re(&self) -> Amplitude {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Real(self.clone())))),
             external_parameters: self.external_parameters.clone(),
@@ -329,10 +337,10 @@ impl<'a> Amplitude<'a> {
             ..Default::default()
         }
     }
-    pub fn real(&self) -> Amplitude<'a> {
+    pub fn real(&self) -> Amplitude {
         self.re()
     }
-    pub fn im(&self) -> Amplitude<'a> {
+    pub fn im(&self) -> Amplitude {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Imag(self.clone())))),
             external_parameters: self.external_parameters.clone(),
@@ -340,15 +348,15 @@ impl<'a> Amplitude<'a> {
             ..Default::default()
         }
     }
-    pub fn imag(&self) -> Amplitude<'a> {
+    pub fn imag(&self) -> Amplitude {
         self.im()
     }
 }
 
-impl<'a> Add for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Add for Amplitude {
+    type Output = Amplitude;
 
-    fn add(self, rhs: Amplitude<'a>) -> Self::Output {
+    fn add(self, rhs: Amplitude) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -369,8 +377,8 @@ impl<'a> Add for Amplitude<'a> {
         }
     }
 }
-impl<'a> Add for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Add for &Amplitude {
+    type Output = Amplitude;
     fn add(self, rhs: Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
@@ -395,9 +403,9 @@ impl<'a> Add for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Add<&'a Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn add(self, rhs: &'a Self) -> Self::Output {
+impl Add<&Amplitude> for Amplitude {
+    type Output = Amplitude;
+    fn add(self, rhs: &Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -419,10 +427,10 @@ impl<'a> Add<&'a Amplitude<'a>> for Amplitude<'a> {
     }
 }
 
-impl<'a> Sub for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Sub for Amplitude {
+    type Output = Amplitude;
 
-    fn sub(self, rhs: Amplitude<'a>) -> Self::Output {
+    fn sub(self, rhs: Amplitude) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -443,8 +451,8 @@ impl<'a> Sub for Amplitude<'a> {
         }
     }
 }
-impl<'a> Sub for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Sub for &Amplitude {
+    type Output = Amplitude;
     fn sub(self, rhs: Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
@@ -469,9 +477,9 @@ impl<'a> Sub for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Sub<&'a Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn sub(self, rhs: &'a Self) -> Self::Output {
+impl Sub<&Amplitude> for Amplitude {
+    type Output = Amplitude;
+    fn sub(self, rhs: &Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -493,10 +501,10 @@ impl<'a> Sub<&'a Amplitude<'a>> for Amplitude<'a> {
     }
 }
 
-impl<'a> Mul for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Mul for Amplitude {
+    type Output = Amplitude;
 
-    fn mul(self, rhs: Amplitude<'a>) -> Self::Output {
+    fn mul(self, rhs: Amplitude) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -517,8 +525,8 @@ impl<'a> Mul for Amplitude<'a> {
         }
     }
 }
-impl<'a> Mul for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Mul for &Amplitude {
+    type Output = Amplitude;
     fn mul(self, rhs: Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
@@ -543,9 +551,9 @@ impl<'a> Mul for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Mul<&'a Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn mul(self, rhs: &'a Self) -> Self::Output {
+impl Mul<&Amplitude> for Amplitude {
+    type Output = Amplitude;
+    fn mul(self, rhs: &Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -567,10 +575,10 @@ impl<'a> Mul<&'a Amplitude<'a>> for Amplitude<'a> {
     }
 }
 
-impl<'a> Div for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Div for Amplitude {
+    type Output = Amplitude;
 
-    fn div(self, rhs: Amplitude<'a>) -> Self::Output {
+    fn div(self, rhs: Amplitude) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -591,8 +599,8 @@ impl<'a> Div for Amplitude<'a> {
         }
     }
 }
-impl<'a> Div for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Div for &Amplitude {
+    type Output = Amplitude;
     fn div(self, rhs: Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
@@ -617,9 +625,9 @@ impl<'a> Div for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Div<&'a Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn div(self, rhs: &'a Self) -> Self::Output {
+impl Div<&Amplitude> for Amplitude {
+    type Output = Amplitude;
+    fn div(self, rhs: &Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -641,10 +649,10 @@ impl<'a> Div<&'a Amplitude<'a>> for Amplitude<'a> {
     }
 }
 
-impl<'a> Pow<Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Pow<Amplitude> for Amplitude {
+    type Output = Amplitude;
 
-    fn pow(self, rhs: Amplitude<'a>) -> Self::Output {
+    fn pow(self, rhs: Amplitude) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -665,8 +673,8 @@ impl<'a> Pow<Amplitude<'a>> for Amplitude<'a> {
         }
     }
 }
-impl<'a> Pow<Self> for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Pow<Self> for &Amplitude {
+    type Output = Amplitude;
     fn pow(self, rhs: Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
@@ -691,9 +699,9 @@ impl<'a> Pow<Self> for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Pow<&'a Amplitude<'a>> for Amplitude<'a> {
-    type Output = Amplitude<'a>;
-    fn pow(self, rhs: &'a Self) -> Self::Output {
+impl Pow<&Amplitude> for Amplitude {
+    type Output = Amplitude;
+    fn pow(self, rhs: &Self) -> Self::Output {
         let external_parameters = DashMap::new();
         self.external_parameters
             .iter()
@@ -715,8 +723,8 @@ impl<'a> Pow<&'a Amplitude<'a>> for Amplitude<'a> {
     }
 }
 
-impl<'a> Neg for &'a Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Neg for &Amplitude {
+    type Output = Amplitude;
     fn neg(self) -> Self::Output {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Neg(self.clone())))),
@@ -726,8 +734,8 @@ impl<'a> Neg for &'a Amplitude<'a> {
         }
     }
 }
-impl<'a> Neg for Amplitude<'a> {
-    type Output = Amplitude<'a>;
+impl Neg for Amplitude {
+    type Output = Amplitude;
     fn neg(self) -> Self::Output {
         Amplitude {
             op: Some(Arc::new(RwLock::new(Operation::Neg(self.clone())))),
@@ -738,7 +746,7 @@ impl<'a> Neg for Amplitude<'a> {
     }
 }
 
-impl<'a> From<f64> for Amplitude<'a> {
+impl From<f64> for Amplitude {
     fn from(value: f64) -> Self {
         AmplitudeBuilder::default()
             .name(value.to_string())
@@ -747,7 +755,7 @@ impl<'a> From<f64> for Amplitude<'a> {
             .unwrap()
     }
 }
-impl<'a> From<Complex64> for Amplitude<'a> {
+impl From<Complex64> for Amplitude {
     fn from(value: Complex64) -> Self {
         AmplitudeBuilder::default()
             .name(value.to_string())
@@ -757,19 +765,8 @@ impl<'a> From<Complex64> for Amplitude<'a> {
     }
 }
 
-pub trait IntoAmplitude<'a> {
-    fn into_amplitude(self) -> Amplitude<'a>;
-    fn assign(self, parameters: &[Parameter<'a>]) -> Amplitude<'a>
-    where
-        Self: Sized,
-    {
-        let amplitude = self.into_amplitude();
-        let internal_names = amplitude.internal_parameters.read().clone();
-        for (e_par, i_name) in parameters.iter().zip(internal_names.iter()) {
-            amplitude.assign(e_par, i_name);
-        }
-        amplitude
-    }
+pub trait IntoAmplitude {
+    fn into_amplitude(self) -> Amplitude;
 }
 
 #[derive(Variantly, Clone, Copy, Debug)]
@@ -780,36 +777,37 @@ pub enum ParameterValue {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Parameter<'a> {
-    pub name: &'a str,
+pub struct Parameter {
+    pub name: &'static str,
     pub value: ParameterValue,
 }
 
-impl<'a> Hash for Parameter<'a> {
+impl Hash for Parameter {
     /// This ensures the hash lookup only depends on the name of the parameter, not its value
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
 }
 
-impl<'a> PartialEq for Parameter<'a> {
+impl PartialEq for Parameter {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl<'a> Eq for Parameter<'a> {}
+impl Eq for Parameter {}
 
-impl<'a> Parameter<'a> {
-    pub fn new(name: &str, value: ParameterValue) -> Parameter {
+impl Parameter {
+    pub fn new(name: &'static str, value: ParameterValue) -> Parameter {
         Parameter { name, value }
     }
 }
 
-impl<'a> From<Parameter<'a>> for Amplitude<'a> {
-    fn from(par: Parameter<'a>) -> Self {
+impl IntoAmplitude for Parameter {
+    fn into_amplitude(self) -> Amplitude {
+        let par = self.clone();
         AmplitudeBuilder::default()
-            .name(par.name)
+            .name(self.name)
             .function(|pars: &ParMap, _vars: &Entry| {
                 Ok(match pars.get("parameter").unwrap().value {
                     ParameterValue::Scalar(val) => Complex64::from(val),
@@ -819,5 +817,6 @@ impl<'a> From<Parameter<'a>> for Amplitude<'a> {
             .internal_parameters(["parameter"])
             .build()
             .unwrap()
+            .with(&[par])
     }
 }

@@ -1,16 +1,14 @@
 use std::fs::File;
 
-use dashmap::DashMap;
 use polars::prelude::*;
 use rayon::prelude::*;
 
 use ndarray::{Array1, Array2};
 use num_complex::Complex64;
-use rustc_hash::FxHashMap;
+use parking_lot::RwLock;
+use rustc_hash::FxHashMap as HashMap;
 
-use crate::{
-    four_momentum::FourMomentum,
-};
+use crate::four_momentum::FourMomentum;
 use anyinput::anyinput;
 use thiserror::Error;
 use variantly::Variantly;
@@ -47,14 +45,14 @@ pub type Momenta64 = Vec<FourMomentum>;
 #[derive(Default, Debug)]
 pub struct Entry {
     index: usize,
-    scalar_map: DashMap<String, Scalar64>,
-    cscalar_map: DashMap<String, CScalar64>,
-    vector_map: DashMap<String, Vector64>,
-    cvector_map: DashMap<String, CVector64>,
-    matrix_map: DashMap<String, Matrix64>,
-    cmatrix_map: DashMap<String, CMatrix64>,
-    momentum_map: DashMap<String, Momentum64>,
-    momenta_map: DashMap<String, Momenta64>,
+    scalar_map: HashMap<String, Scalar64>,
+    cscalar_map: HashMap<String, CScalar64>,
+    vector_map: HashMap<String, Vector64>,
+    cvector_map: HashMap<String, CVector64>,
+    matrix_map: HashMap<String, Matrix64>,
+    cmatrix_map: HashMap<String, CMatrix64>,
+    momentum_map: HashMap<String, Momentum64>,
+    momenta_map: HashMap<String, Momenta64>,
 }
 
 #[derive(Error, Debug)]
@@ -180,29 +178,29 @@ pub struct FieldType {
 
 #[derive(Debug, Clone)]
 pub struct Dataset {
-    pub entries: Vec<Arc<Entry>>,
-    fields: FxHashMap<String, FieldType>,
+    pub entries: Vec<Arc<RwLock<Entry>>>,
+    fields: HashMap<String, FieldType>,
 }
 
 impl Dataset {
     pub fn from_size(size: usize) -> Dataset {
         let entries = (0..size)
             .into_iter()
-            .map(|index| Arc::new(Entry::new(index)))
+            .map(|index| Arc::new(RwLock::new(Entry::new(index))))
             .collect();
         Dataset {
             entries,
-            fields: FxHashMap::default(),
+            fields: HashMap::default(),
         }
     }
     pub fn from_size_par(size: usize) -> Dataset {
         let entries = (0..size)
             .into_par_iter()
-            .map(|index| Arc::new(Entry::new(index)))
+            .map(|index| Arc::new(RwLock::new(Entry::new(index))))
             .collect();
         Dataset {
             entries,
-            fields: FxHashMap::default(),
+            fields: HashMap::default(),
         }
     }
 
@@ -238,7 +236,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.scalar_map.insert(name.to_string(), value);
+                        entry.write().scalar_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -276,7 +274,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.scalar_map.insert(name.to_string(), value);
+                        entry.write().scalar_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -314,7 +312,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.cscalar_map.insert(name.to_string(), value);
+                        entry.write().cscalar_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -352,7 +350,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.cscalar_map.insert(name.to_string(), value);
+                        entry.write().cscalar_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -390,7 +388,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.vector_map.insert(name.to_string(), value);
+                        entry.write().vector_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -428,7 +426,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.vector_map.insert(name.to_string(), value);
+                        entry.write().vector_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -466,7 +464,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.cvector_map.insert(name.to_string(), value);
+                        entry.write().cvector_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -504,7 +502,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.cvector_map.insert(name.to_string(), value);
+                        entry.write().cvector_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -542,7 +540,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.matrix_map.insert(name.to_string(), value);
+                        entry.write().matrix_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -580,7 +578,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.matrix_map.insert(name.to_string(), value);
+                        entry.write().matrix_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -618,7 +616,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.cmatrix_map.insert(name.to_string(), value);
+                        entry.write().cmatrix_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -656,7 +654,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.cmatrix_map.insert(name.to_string(), value);
+                        entry.write().cmatrix_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -694,7 +692,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.momentum_map.insert(name.to_string(), value);
+                        entry.write().momentum_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -732,7 +730,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.momentum_map.insert(name.to_string(), value);
+                        entry.write().momentum_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -770,7 +768,7 @@ impl Dataset {
                     .iter_mut()
                     .zip(values.into_iter())
                     .for_each(|(entry, value)| {
-                        entry.momenta_map.insert(name.to_string(), value);
+                        entry.write().momenta_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -808,7 +806,7 @@ impl Dataset {
                     .par_iter_mut()
                     .zip(values.into_par_iter())
                     .for_each(|(entry, value)| {
-                        entry.momenta_map.insert(name.to_string(), value);
+                        entry.write().momenta_map.insert(name.to_string(), value);
                     });
 
                 self.fields.insert(
@@ -848,35 +846,35 @@ impl Dataset {
         }
         self.entries.iter_mut().for_each(|entry| {
             for key in &p_scalar {
-                entry.scalar_map.remove(key);
+                entry.write().scalar_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_cscalar {
-                entry.cscalar_map.remove(key);
+                entry.write().cscalar_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_vector {
-                entry.vector_map.remove(key);
+                entry.write().vector_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_cvector {
-                entry.cvector_map.remove(key);
+                entry.write().cvector_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_matrix {
-                entry.matrix_map.remove(key);
+                entry.write().matrix_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_cmatrix {
-                entry.cmatrix_map.remove(key);
+                entry.write().cmatrix_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_momentum {
-                entry.momentum_map.remove(key);
+                entry.write().momentum_map.remove(key);
                 self.fields.remove(key);
             }
             for key in &p_momenta {
-                entry.momenta_map.remove(key);
+                entry.write().momenta_map.remove(key);
                 self.fields.remove(key);
             }
         })
@@ -912,28 +910,28 @@ impl Dataset {
         }
         self.entries.par_iter_mut().for_each(|entry| {
             for key in &p_scalar {
-                entry.scalar_map.remove(key);
+                entry.write().scalar_map.remove(key);
             }
             for key in &p_cscalar {
-                entry.cscalar_map.remove(key);
+                entry.write().cscalar_map.remove(key);
             }
             for key in &p_vector {
-                entry.vector_map.remove(key);
+                entry.write().vector_map.remove(key);
             }
             for key in &p_cvector {
-                entry.cvector_map.remove(key);
+                entry.write().cvector_map.remove(key);
             }
             for key in &p_matrix {
-                entry.matrix_map.remove(key);
+                entry.write().matrix_map.remove(key);
             }
             for key in &p_cmatrix {
-                entry.cmatrix_map.remove(key);
+                entry.write().cmatrix_map.remove(key);
             }
             for key in &p_momentum {
-                entry.momentum_map.remove(key);
+                entry.write().momentum_map.remove(key);
             }
             for key in &p_momenta {
-                entry.momenta_map.remove(key);
+                entry.write().momenta_map.remove(key);
             }
         })
     }

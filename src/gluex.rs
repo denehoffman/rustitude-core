@@ -29,7 +29,7 @@ use crate::prelude::*;
 /// properly.
 pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, DatasetError> {
     let dataframe = open_parquet(path).expect("Read error");
-    let mut dataset = Dataset::from_size_par(dataframe.height());
+    let mut dataset = Dataset::from_size(dataframe.height());
     let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
     let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
     let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
@@ -68,18 +68,77 @@ pub struct ParticleInfo {
     pub resonance_indices: Vec<usize>,
 }
 
+#[derive(Clone, Copy)]
+pub enum Wave {
+    S0,
+    Pn1,
+    P0,
+    P1,
+    Dn2,
+    Dn1,
+    D0,
+    D1,
+    D2,
+    Fn3,
+    Fn2,
+    Fn1,
+    F0,
+    F1,
+    F2,
+    F3,
+}
+
+impl Wave {
+    pub fn l(&self) -> i64 {
+        match self {
+            Self::S0 => 0,
+            Self::Pn1 | Self::P0 | Self::P1 => 1,
+            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 => 2,
+            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 => 3,
+        }
+    }
+    pub fn m(&self) -> i64 {
+        match self {
+            Self::S0 | Self::P0 | Self::D0 | Self::F0 => 0,
+            Self::Pn1 | Self::Dn1 | Self::Fn1 => -1,
+            Self::P1 | Self::D1 | Self::F1 => 1,
+            Self::Dn2 | Self::Fn2 => -2,
+            Self::D2 | Self::F2 => 2,
+            Self::Fn3 => -3,
+            Self::F3 => 3,
+        }
+    }
+}
+
+impl ToString for Wave {
+    fn to_string(&self) -> String {
+        let l_string = match self {
+            Self::S0 => "S",
+            Self::Pn1 | Self::P0 | Self::P1 => "P",
+            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 => "D",
+            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 => "F",
+        };
+        format!("{} {:+}", l_string, self.m())
+    }
+}
+
 #[derive(Clone)]
 pub struct Ylm {
-    pub l: usize,
-    pub m: isize,
+    pub wave: Wave,
     pub particle_info: ParticleInfo,
+}
+
+impl ToString for Ylm {
+    fn to_string(&self) -> String {
+        format!("Ylm ({})", self.wave.to_string())
+    }
 }
 
 impl IntoVariable for Ylm {
     fn into_variable(self) -> Variable {
         Variable::CScalar(
             CScalarVariableBuilder::default()
-                .name(&format!("Y {} {}", self.l, self.m))
+                .name(self.to_string())
                 .function(move |entry: &Entry| {
                     let beam_p4_lab = entry.momentum("Beam P4").unwrap();
                     let fs_p4s_lab = entry.momenta("Final State P4").unwrap();
@@ -115,8 +174,7 @@ impl IntoVariable for Ylm {
                         daughter_p3_res.dot(&y),
                         daughter_p3_res.dot(&z),
                     );
-                    #[allow(clippy::cast_possible_wrap)]
-                    ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p)
+                    ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p)
                 })
                 .build()
                 .unwrap(),
@@ -124,124 +182,112 @@ impl IntoVariable for Ylm {
     }
 }
 
-impl<'a> IntoAmplitude<'a> for Ylm {
-    fn into_amplitude(self) -> Amplitude<'a> {
+impl IntoAmplitude for Ylm {
+    fn into_amplitude(self) -> Amplitude {
         self.into_variable().cscalar().unwrap().into_amplitude()
     }
 }
 
-// impl<'a> AmplitudeBuilder<'a> for Ylm {
-//     fn into_amplitude(self) -> Amplitude<'a> {
-//         let ylm_var = self.into_variable();
-//         let var_name = ylm_var.name.clone();
-//         Amplitude::new(
-//             &var_name.clone(),
-//             move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar_ref().unwrap())),
-//             None,
-//             Some(vec![ylm_var.clone()]),
-//         )
-//     }
-// }
-//
-// pub enum Reflectivity {
-//     Positive,
-//     Negative,
-// }
-// pub struct Zlm {
-//     pub l: usize,
-//     pub m: isize,
-//     pub r: Reflectivity,
-//     pub particle_info: ParticleInfo,
-// }
-// impl VariableBuilder for Zlm {
-//     fn into_variable(self) -> Variable {
-//         Variable::new(
-//             &format!(
-//                 "Z {} {} {}",
-//                 self.l,
-//                 self.m,
-//                 match self.r {
-//                     Reflectivity::Positive => "+",
-//                     Reflectivity::Negative => "-",
-//                 }
-//             ),
-//             move |entry: &VarMap| {
-//                 let beam_p4_lab = entry["Beam P4"].momentum_ref().unwrap();
-//                 let fs_p4s_lab = entry["Final State P4"].momenta_ref().unwrap();
-//                 let fs_p4_lab = &fs_p4s_lab.iter().sum();
-//                 let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
-//                 let resonance_p4_lab: &FourMomentum = &self
-//                     .particle_info
-//                     .resonance_indices
-//                     .iter()
-//                     .map(|i| &fs_p4s_lab[*i])
-//                     .sum();
-//                 let daughter_p4_lab = &fs_p4s_lab[self.particle_info.daughter_index];
-//
-//                 let beam_p4 = &beam_p4_lab.boost_along(fs_p4_lab);
-//                 let recoil_p4 = &recoil_p4_lab.boost_along(fs_p4_lab);
-//                 let resonance_p4 = &resonance_p4_lab.boost_along(fs_p4_lab);
-//                 let daughter_p4 = &daughter_p4_lab.boost_along(fs_p4_lab);
-//
-//                 let recoil_p4_res = &recoil_p4.boost_along(resonance_p4);
-//                 let daughter_p4_res = &daughter_p4.boost_along(resonance_p4);
-//
-//                 let z = -1.0 * recoil_p4_res.momentum().normalize();
-//                 let y = beam_p4
-//                     .momentum()
-//                     .cross(&(-1.0 * recoil_p4.momentum()))
-//                     .normalize();
-//                 let x = y.cross(&z);
-//
-//                 let daughter_p3_res = daughter_p4_res.momentum();
-//
-//                 let p = Coordinates::cartesian(
-//                     daughter_p3_res.dot(&x),
-//                     daughter_p3_res.dot(&y),
-//                     daughter_p3_res.dot(&z),
-//                 );
-//                 #[allow(clippy::cast_possible_wrap)]
-//                 let ylm = ComplexSH::Spherical.eval(self.l as i64, self.m as i64, &p);
-//
-//                 // Polarization
-//                 let eps = Vector3::from_vec(entry["EPS"].vector_ref().unwrap().to_vec());
-//                 let big_phi = y
-//                     .dot(&eps)
-//                     .atan2(beam_p4.momentum().normalize().dot(&eps.cross(&y)));
-//                 let phase = Complex64::cis(-big_phi);
-//                 let pgamma = eps.norm();
-//
-//                 let zlm = ylm * phase;
-//
-//                 let res = match self.r {
-//                     Reflectivity::Positive => Complex64 {
-//                         re: (1.0 + pgamma).sqrt() * zlm.re,
-//                         im: (1.0 - pgamma).sqrt() * zlm.im,
-//                     },
-//                     Reflectivity::Negative => Complex64 {
-//                         re: (1.0 - pgamma).sqrt() * zlm.re,
-//                         im: (1.0 + pgamma).sqrt() * zlm.im,
-//                     },
-//                 };
-//                 FieldType::CScalar(res)
-//             },
-//             None,
-//         )
-//     }
-// }
-// impl<'a> AmplitudeBuilder<'a> for Zlm {
-//     fn into_amplitude(self) -> Amplitude<'a> {
-//         let zlm_var = self.into_variable();
-//         let var_name = zlm_var.name.clone();
-//         Amplitude::new(
-//             &var_name.clone(),
-//             move |_pars: &ParMap, vars: &VarMap| Ok(*(vars[&*var_name].cscalar_ref().unwrap())),
-//             None,
-//             Some(vec![zlm_var.clone()]),
-//         )
-//     }
-// }
-//
+pub enum Reflectivity {
+    Positive,
+    Negative,
+}
+
+impl ToString for Reflectivity {
+    fn to_string(&self) -> String {
+        match self {
+            Self::Positive => "+".to_string(),
+            Self::Negative => "-".to_string(),
+        }
+    }
+}
+pub struct Zlm {
+    pub wave: Wave,
+    pub r: Reflectivity,
+    pub particle_info: ParticleInfo,
+}
+
+impl ToString for Zlm {
+    fn to_string(&self) -> String {
+        format!("Zlm ({}){}", self.wave.to_string(), self.r.to_string())
+    }
+}
+
+impl IntoVariable for Zlm {
+    fn into_variable(self) -> Variable {
+        Variable::CScalar(
+            CScalarVariableBuilder::default()
+                .name(self.to_string())
+                .function(move |entry: &Entry| {
+                    let beam_p4_lab = entry.momentum("Beam P4").unwrap();
+                    let fs_p4s_lab = entry.momenta("Final State P4").unwrap();
+                    let fs_p4_lab = &fs_p4s_lab.iter().sum();
+                    let recoil_p4_lab = &fs_p4s_lab[self.particle_info.recoil_index];
+                    let resonance_p4_lab: &FourMomentum = &self
+                        .particle_info
+                        .resonance_indices
+                        .iter()
+                        .map(|i| &fs_p4s_lab[*i])
+                        .sum();
+                    let daughter_p4_lab = &fs_p4s_lab[self.particle_info.daughter_index];
+
+                    let beam_p4 = &beam_p4_lab.boost_along(fs_p4_lab);
+                    let recoil_p4 = &recoil_p4_lab.boost_along(fs_p4_lab);
+                    let resonance_p4 = &resonance_p4_lab.boost_along(fs_p4_lab);
+                    let daughter_p4 = &daughter_p4_lab.boost_along(fs_p4_lab);
+
+                    let recoil_p4_res = &recoil_p4.boost_along(resonance_p4);
+                    let daughter_p4_res = &daughter_p4.boost_along(resonance_p4);
+
+                    let z = -1.0 * recoil_p4_res.momentum().normalize();
+                    let y = beam_p4
+                        .momentum()
+                        .cross(&(-1.0 * recoil_p4.momentum()))
+                        .normalize();
+                    let x = y.cross(&z);
+
+                    let daughter_p3_res = daughter_p4_res.momentum();
+
+                    let p = Coordinates::cartesian(
+                        daughter_p3_res.dot(&x),
+                        daughter_p3_res.dot(&y),
+                        daughter_p3_res.dot(&z),
+                    );
+                    let ylm = ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p);
+
+                    // Linear polarization
+                    let eps = Vector3::from_vec(entry.vector("EPS").unwrap().to_vec());
+                    let big_phi = y
+                        .dot(&eps)
+                        .atan2(beam_p4.momentum().normalize().dot(&eps.cross(&y)));
+                    let phase = Complex64::cis(-big_phi);
+                    let pgamma = eps.norm();
+
+                    let zlm = ylm * phase;
+
+                    match self.r {
+                        Reflectivity::Positive => Complex64 {
+                            re: (1.0 + pgamma).sqrt() * zlm.re,
+                            im: (1.0 - pgamma).sqrt() * zlm.im,
+                        },
+                        Reflectivity::Negative => Complex64 {
+                            re: (1.0 - pgamma).sqrt() * zlm.re,
+                            im: (1.0 + pgamma).sqrt() * zlm.im,
+                        },
+                    }
+                })
+                .build()
+                .unwrap(),
+        )
+    }
+}
+
+impl IntoAmplitude for Zlm {
+    fn into_amplitude(self) -> Amplitude {
+        self.into_variable().cscalar().unwrap().into_amplitude()
+    }
+}
+
 // #[derive(Clone)]
 // pub struct Mass {
 //     name: String,

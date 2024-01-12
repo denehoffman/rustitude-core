@@ -3,6 +3,7 @@ pub mod amplitude;
 pub mod dataset;
 pub mod four_momentum;
 pub mod gluex;
+pub mod parameter;
 pub mod variable;
 // pub mod likelihood;
 pub mod prelude {

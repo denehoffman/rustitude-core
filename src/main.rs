@@ -8,26 +8,46 @@ use ndarray::array;
 use num_complex::Complex64;
 use num_traits::Pow;
 // use rustitude::gluex::KMatrixConstants;
-use rustitude::gluex::{self, open_gluex};
+use rustitude::gluex::{self, open_gluex, Reflectivity, Wave, Zlm};
 use rustitude::prelude::*;
 
 fn main() {
-    let mut dataset = open_gluex("data_pol.parquet", true).unwrap();
-    let particles = gluex::ParticleInfo {
+    let mut dataset = open_gluex("accmc_pol.parquet", true).unwrap();
+    let particle_info = gluex::ParticleInfo {
         recoil_index: 0,
         daughter_index: 1,
         resonance_indices: Vec::from([1, 2]),
     };
-    let ylm = gluex::Ylm {
-        l: 0,
-        m: 0,
-        particle_info: particles,
+
+    let d2plus = Zlm {
+        wave: Wave::D2,
+        r: Reflectivity::Positive,
+        particle_info: particle_info.clone(),
     }
     .into_amplitude();
 
+    let s0plus = Zlm {
+        wave: Wave::S0,
+        r: Reflectivity::Positive,
+        particle_info: particle_info.clone(),
+    }
+    .into_amplitude();
+
+    let amp: Amplitude = (par!("S0+", 100.0).into_amplitude() * s0plus.real()
+        + cpar!("D2+", 50.0, 50.0).into_amplitude() * d2plus.real())
+    .norm_sqr()
+        + (par!("S0+", 100.0).into_amplitude() * s0plus.imag()
+            + cpar!("D2+", 50.0, 50.0).into_amplitude() * d2plus.imag())
+        .norm_sqr();
+
     let time = Instant::now();
-    ylm.resolve_par(&mut dataset).unwrap();
+    amp.resolve_par(&mut dataset).unwrap();
     println!("{:?}", time.elapsed());
+
+    let time = Instant::now();
+    let res = amp.evaluate_on_par(&dataset);
+    println!("{:?}", time.elapsed());
+    println!("{}", res[0]);
 }
 
 // #[allow(clippy::too_many_lines)]
