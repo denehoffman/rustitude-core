@@ -1661,7 +1661,7 @@ dependencies = [
  "toml",
  "ureq",
  "url",
- "uuid 1.6.1",
+ "uuid 1.7.0",
  "walkdir",
 ]
 
@@ -2382,6 +2382,7 @@ dependencies = [
  "rustc-hash",
  "sphrs",
  "thiserror",
+ "uuid 1.7.0",
  "variantly",
 ]
 
@@ -3055,9 +3056,9 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.6.1"
+version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e395fcf16a7a3d8127ec99782007af141946b4795001f876d54fb0d55978560"
+checksum = "f00cc9702ca12d3c81455259621e676d0f7251cec66a21e98fe2e9a37db93b2a"
 dependencies = [
  "getrandom",
 ]

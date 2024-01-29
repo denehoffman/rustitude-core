@@ -7,47 +7,35 @@ use argmin::solver::particleswarm::ParticleSwarm;
 use ndarray::array;
 use num_complex::Complex64;
 use num_traits::Pow;
+use rayon::prelude::*;
 // use rustitude::gluex::KMatrixConstants;
-use rustitude::gluex::{self, open_gluex, Reflectivity, Wave, Zlm};
+use rustitude::gluex::{open_gluex, HelicityVec, Reflectivity, ResonanceMass, Wave, Ylm, Zlm};
 use rustitude::prelude::*;
 
 fn main() {
-    let mut dataset = open_gluex("accmc_pol.parquet", true).unwrap();
-    let particle_info = gluex::ParticleInfo {
-        recoil_index: 0,
-        daughter_index: 1,
-        resonance_indices: Vec::from([1, 2]),
-    };
+    let now = Instant::now();
+    let mut dataset = open_gluex("acc_pol.parquet", true).unwrap();
+    let elapsed = now.elapsed();
+    println!("Load: {:.2?}", elapsed);
 
-    let d2plus = Zlm {
-        wave: Wave::D2,
-        r: Reflectivity::Positive,
-        particle_info: particle_info.clone(),
-    }
-    .into_amplitude();
+    let z22p: Zlm = Zlm::new(Wave::D2, Reflectivity::Positive);
+    let now = Instant::now();
+    z22p.resolve(&mut dataset);
+    let elapsed = now.elapsed();
+    println!("Resolve: {:.2?}", elapsed);
+    let now = Instant::now();
+    let val = dataset.cscalar(&z22p.zlm).unwrap();
+    let elapsed = now.elapsed();
+    println!("Access: {:.2?}", elapsed);
 
-    let s0plus = Zlm {
-        wave: Wave::S0,
-        r: Reflectivity::Positive,
-        particle_info: particle_info.clone(),
-    }
-    .into_amplitude();
-
-    let amp: Amplitude = (par!("S0+", 100.0).into_amplitude() * s0plus.real()
-        + cpar!("D2+", 50.0, 50.0).into_amplitude() * d2plus.real())
-    .norm_sqr()
-        + (par!("S0+", 100.0).into_amplitude() * s0plus.imag()
-            + cpar!("D2+", 50.0, 50.0).into_amplitude() * d2plus.imag())
-        .norm_sqr();
-
-    let time = Instant::now();
-    amp.resolve_par(&mut dataset).unwrap();
-    println!("{:?}", time.elapsed());
-
-    let time = Instant::now();
-    let res = amp.evaluate_on_par(&dataset);
-    println!("{:?}", time.elapsed());
-    println!("{}", res[0]);
+    let now = Instant::now();
+    z22p.resolve(&mut dataset);
+    let elapsed = now.elapsed();
+    println!("Resolve: {:.2?}", elapsed);
+    let now = Instant::now();
+    let val = dataset.cscalar(&z22p.zlm).unwrap();
+    let elapsed = now.elapsed();
+    println!("Access: {:.2?}", elapsed);
 }
 
 // #[allow(clippy::too_many_lines)]
