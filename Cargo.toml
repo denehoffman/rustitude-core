@@ -10,13 +10,11 @@ license = "BSD-3-Clause"
 readme = "README.md"
 exclude = ["convert", "data.*", "src/main.rs"]
 
-[profile.release]
-debug = true
-
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+rayon = { version = "1.8.0" }
 approx = { version = "0.5.1", features = ["num-complex"] }
 argmin = "0.8.1"
 argmin-math = "0.3.0"
@@ -26,8 +24,7 @@ ndarray-linalg = "0.16.0"
 num = "0.4.1"
 num-complex = "0.4.4"
 num-traits = "0.2.17"
-polars = { version = "0.35.4", features = ["parquet", "describe"] }
-rayon = "1.8.0"
+polars = { version = "0.36.2", features = ["parquet", "describe"] }
 sphrs = "0.2.2"
 thiserror = "1.0.51"
 derive_more = { version = "0.99.17", default-features = false, features = [
@@ -39,6 +36,10 @@ derive-new = "0.6.0"
 parking_lot = "0.12.1"
 rustc-hash = "1.1.0"
 variantly = "0.4.0"
+anyinput = "0.1.6"
+dashmap = "5.5.3"
+derive_builder = "0.12.0"
+uuid = { version = "1.7.0", features = ["v4"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 accelerate-src = "0.3.2"
 
@@ -51,6 +52,7 @@ netlib-static = ["blas", "ndarray-linalg/netlib-static"]
 netlib-system = ["blas", "ndarray-linalg/netlib-system"]
 intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
 intel-mkl-system = ["blas", "ndarray-linalg/intel-mkl-system"]
+# rayon = ["rayon_"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]

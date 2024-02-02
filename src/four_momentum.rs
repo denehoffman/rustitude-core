@@ -2,7 +2,7 @@ use nalgebra::Vector3;
 use ndarray::{array, Array1, Array2};
 use std::ops::{Add, Sub};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 pub struct FourMomentum {
     pub e: f64,
     pub px: f64,
@@ -167,6 +167,39 @@ impl From<FourMomentum> for Array1<f64> {
 
 impl From<Array1<f64>> for FourMomentum {
     fn from(value: Array1<f64>) -> Self {
+        Self {
+            e: value[0],
+            px: value[1],
+            py: value[2],
+            pz: value[3],
+        }
+    }
+}
+
+impl From<&Array1<f64>> for FourMomentum {
+    fn from(value: &Array1<f64>) -> Self {
+        Self {
+            e: value[0],
+            px: value[1],
+            py: value[2],
+            pz: value[3],
+        }
+    }
+}
+
+impl From<Vec<f64>> for FourMomentum {
+    fn from(value: Vec<f64>) -> Self {
+        Self {
+            e: value[0],
+            px: value[1],
+            py: value[2],
+            pz: value[3],
+        }
+    }
+}
+
+impl From<&Vec<f64>> for FourMomentum {
+    fn from(value: &Vec<f64>) -> Self {
         Self {
             e: value[0],
             px: value[1],
