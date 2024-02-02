@@ -1,4 +1,3 @@
-#![feature(map_try_insert)]
 #![allow(dead_code)]
 pub mod dataset;
 pub mod four_momentum;
