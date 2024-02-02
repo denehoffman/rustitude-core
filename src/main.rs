@@ -1,4 +1,5 @@
 #![allow(unused_imports)]
+use std::collections::HashMap;
 use std::time::Instant;
 
 use argmin::core::observers::SlogLogger;
@@ -10,32 +11,43 @@ use num_traits::Pow;
 use rayon::prelude::*;
 // use rustitude::gluex::KMatrixConstants;
 use rustitude::gluex::{open_gluex, HelicityVec, Reflectivity, ResonanceMass, Wave, Ylm, Zlm};
+use rustitude::node::{ComplexParameterNode, ParameterNode, Parameterized};
 use rustitude::prelude::*;
 
 fn main() {
     let now = Instant::now();
-    let mut dataset = open_gluex("acc_pol.parquet", true).unwrap();
+    let mut dataset = open_gluex("accmc_pol.parquet", true).unwrap();
     let elapsed = now.elapsed();
     println!("Load: {:.2?}", elapsed);
+    let s0_plus = Zlm::new(Wave::S0, Reflectivity::Positive);
+    let d2_plus = Zlm::new(Wave::D2, Reflectivity::Positive);
+    let p_s0_plus = ComplexParameterNode::new("S0+ re", "S0+ im");
+    let p_d2_plus = ComplexParameterNode::new("D2+ re", "D2+ im");
+    let pos_re = s0_plus
+        .real()
+        .mul_complex(&p_s0_plus)
+        .add(&d2_plus.real().mul_complex(&p_d2_plus));
 
-    let z22p: Zlm = Zlm::new(Wave::D2, Reflectivity::Positive);
+    let pos_im = s0_plus
+        .imag()
+        .mul_complex(&p_s0_plus)
+        .add(&d2_plus.imag().mul_complex(&p_d2_plus));
+
+    let amp = pos_re.norm_sqr().add(&pos_im.norm_sqr());
     let now = Instant::now();
-    z22p.resolve(&mut dataset);
+    amp.resolve(&mut dataset);
     let elapsed = now.elapsed();
     println!("Resolve: {:.2?}", elapsed);
-    let now = Instant::now();
-    let val = dataset.cscalar(&z22p.zlm).unwrap();
-    let elapsed = now.elapsed();
-    println!("Access: {:.2?}", elapsed);
 
+    let mut pars: HashMap<String, f64> = HashMap::default();
+    pars.insert("S0+ re".to_string(), 2.3);
+    pars.insert("S0+ im".to_string(), 3.4);
+    pars.insert("D2+ re".to_string(), -1.0);
+    pars.insert("D2+ im".to_string(), 5.8);
     let now = Instant::now();
-    z22p.resolve(&mut dataset);
+    let _x = amp.eval(&dataset, &pars);
     let elapsed = now.elapsed();
-    println!("Resolve: {:.2?}", elapsed);
-    let now = Instant::now();
-    let val = dataset.cscalar(&z22p.zlm).unwrap();
-    let elapsed = now.elapsed();
-    println!("Access: {:.2?}", elapsed);
+    println!("Evaluate: {:.2?}", elapsed);
 }
 
 // #[allow(clippy::too_many_lines)]

@@ -76,13 +76,10 @@ impl Dataset {
     }
     #[anyinput]
     pub fn scalar(&self, key: AnyString) -> Result<&Vec<Scalar64>, DatasetError> {
-        match self.scalar_map.get(key) {
-            Some(val) => Ok(val),
-            None => Err(DatasetError::TypeError {
-                key_name: key.to_string(),
-                data_type: DataType::Scalar,
-            }),
-        }
+        self.scalar_map.get(key).ok_or(DatasetError::TypeError {
+            key_name: key.to_string(),
+            data_type: DataType::Scalar,
+        })
     }
 
     #[anyinput]
