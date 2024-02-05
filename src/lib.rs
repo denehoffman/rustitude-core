@@ -2,8 +2,8 @@
 pub mod dataset;
 pub mod four_momentum;
 pub mod gluex;
+pub mod likelihood;
 pub mod node;
-// pub mod likelihood;
 pub mod prelude {
     pub use crate::dataset::{
         extract_scalar, extract_vector, open_parquet, scalars_to_momentum, scalars_to_momentum_par,

@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::time::Instant;
 
 use argmin::core::observers::SlogLogger;
-use argmin::core::Executor;
+use argmin::core::{CostFunction, Executor};
 use argmin::solver::particleswarm::ParticleSwarm;
 use ndarray::array;
 use num_complex::Complex64;

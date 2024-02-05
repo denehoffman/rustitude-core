@@ -1,45 +1,78 @@
+use std::collections::HashMap;
+
+use anyinput::anyinput;
 use argmin::core::{CostFunction, Error};
 use rayon::prelude::*;
 
-use crate::prelude::{Amplitude, Dataset, Parameter};
+use crate::{dataset::Dataset, node::Node};
 
-pub struct ParallelExtendedMaximumLikelihood<'a> {
-    pub data: Dataset,
-    pub amplitude_data: Amplitude<'a>,
-    pub montecarlo: Dataset,
-    pub amplitude_montecarlo: Amplitude<'a>,
-    pub parameter_order: Vec<Parameter<'a>>,
+pub struct EML<'a, 'b, T, U>
+where
+    T: Node,
+    U: Node,
+{
+    data: &'a Dataset,
+    montecarlo: &'b Dataset,
+    amplitude_data: T,
+    amplitude_montecarlo: U,
+    parameter_order: Vec<String>,
 }
 
-impl<'a> ParallelExtendedMaximumLikelihood<'a> {
-    pub fn setup(&mut self) {
-        self.amplitude_data.par_resolve_dependencies(&mut self.data);
-        self.amplitude_montecarlo
-            .par_resolve_dependencies(&mut self.montecarlo);
+impl<'a, 'b, T, U> EML<'a, 'b, T, U>
+where
+    T: Node + Clone,
+    U: Node + Clone,
+{
+    #[anyinput]
+    pub fn new(
+        data: &'a mut Dataset,
+        montecarlo: &'b mut Dataset,
+        amplitude_data: &T,
+        amplitude_montecarlo: &U,
+        parameters: Vec<&str>,
+    ) -> Self {
+        amplitude_data.resolve(data);
+        amplitude_montecarlo.resolve(montecarlo);
+        let parameter_order = parameters.into_iter().map(|s| s.to_string()).collect();
+        EML {
+            data,
+            montecarlo,
+            amplitude_data: amplitude_data.clone(),
+            amplitude_montecarlo: amplitude_montecarlo.clone(),
+            parameter_order,
+        }
     }
 }
 
-impl<'a> CostFunction for ParallelExtendedMaximumLikelihood<'a> {
+impl<'a, 'b, T, U> CostFunction for EML<'a, 'b, T, U>
+where
+    T: Node,
+    U: Node,
+{
     type Param = Vec<f64>;
     type Output = f64;
-    fn cost(&self, params: &Self::Param) -> Result<Self::Output, Error> {
-        let par_names: Vec<&str> = self.parameter_order.iter().map(|p| p.name).collect();
-        self.amplitude_data.load_params(params, &par_names);
-        self.amplitude_montecarlo.load_params(params, &par_names);
+    fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
+        let pars: HashMap<String, f64> = self
+            .parameter_order
+            .iter()
+            .zip(param.into_iter())
+            .map(|(name, val)| (name.clone(), *val))
+            .collect();
         let fn_data: f64 = self
             .amplitude_data
-            .par_evaluate_on(&self.data)
+            .eval(self.data, &pars)
             .into_par_iter()
-            .map(|val| val.re.ln())
+            .zip(self.data.weights())
+            .map(|(val, w)| val.re.ln() * w)
             .sum();
-        let fn_mc: f64 = self
+        let fn_montecarlo: f64 = self
             .amplitude_montecarlo
-            .par_evaluate_on(&self.montecarlo)
+            .eval(self.montecarlo, &pars)
             .into_par_iter()
-            .map(|val| val.re)
+            .zip(self.data.weights())
+            .map(|(val, w)| val.re.powf(*w))
             .sum();
         #[allow(clippy::cast_precision_loss)]
-        Ok(-2.0
-            * (fn_data - (self.data.n_entries as f64 / self.montecarlo.n_entries as f64) * fn_mc))
+        Ok(-2.0 * (fn_data - (self.data.len() / self.montecarlo.len()) as f64 * fn_montecarlo))
     }
 }
