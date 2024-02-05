@@ -274,7 +274,7 @@ impl Resolvable for Ylm {
     }
 }
 
-impl CNode for Ylm {
+impl Node for Ylm {
     fn eval(&self, ds: &Dataset, _pars: &HashMap<String, f64>) -> Vec<CScalar64> {
         ds.cscalar(&self.ylm).unwrap().to_vec()
     }
@@ -422,7 +422,7 @@ impl Resolvable for Zlm {
     }
 }
 
-impl CNode for Zlm {
+impl Node for Zlm {
     fn eval(&self, ds: &Dataset, _pars: &HashMap<String, f64>) -> Vec<CScalar64> {
         ds.cscalar(&self.zlm).unwrap().to_vec()
     }
@@ -590,7 +590,7 @@ impl Parameterized for FrozenKMatrix {
     }
 }
 
-impl CNode for FrozenKMatrix {
+impl Node for FrozenKMatrix {
     fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64> {
         let mass = ds.scalar(&self.mass.mass).unwrap();
         let barrier_factor = ds.cmatrix(&self.barrier_factor.barrier_factor).unwrap();

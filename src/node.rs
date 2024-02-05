@@ -5,7 +5,7 @@ use anyinput::anyinput;
 use rayon::prelude::*;
 use thiserror::Error;
 
-use crate::prelude::{CScalar64, Dataset, Scalar64};
+use crate::prelude::{CScalar64, Dataset};
 
 #[derive(Error, Debug)]
 pub enum ParameterError {
@@ -45,261 +45,96 @@ pub trait Parameterized: Resolvable {
     }
 }
 
-pub trait SNode: Resolvable {
-    fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<Scalar64>;
-    fn abs(&self) -> AbsSSNode<Self>
-    where
-        Self: Sized + Clone,
-    {
-        AbsSSNode { a: self.clone() }
-    }
-    fn neg(&self) -> NegSSNode<Self>
-    where
-        Self: Sized + Clone,
-    {
-        NegSSNode { a: self.clone() }
-    }
-    fn add<U>(&self, other: &U) -> AddSSSNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        AddSSSNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn sub<U>(&self, other: &U) -> SubSSSNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        SubSSSNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn mul<U>(&self, other: &U) -> MulSSSNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        MulSSSNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn div<U>(&self, other: &U) -> DivSSSNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        DivSSSNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn pow<U>(&self, other: &U) -> PowSSSNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        PowSSSNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn add_complex<U>(&self, other: &U) -> AddSCCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: CNode + Clone,
-    {
-        AddSCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn sub_complex<U>(&self, other: &U) -> SubSCCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: CNode + Clone,
-    {
-        SubSCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn mul_complex<U>(&self, other: &U) -> MulSCCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: CNode + Clone,
-    {
-        MulSCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn div_complex<U>(&self, other: &U) -> DivSCCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: CNode + Clone,
-    {
-        DivSCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn pow_complex<U>(&self, other: &U) -> PowSCCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: CNode + Clone,
-    {
-        PowSCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-}
-pub trait CNode: Resolvable {
+pub trait Node: Resolvable {
     fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64>;
-    fn abs(&self) -> AbsCSNode<Self>
+    fn abs(&self) -> AbsNode<Self>
     where
         Self: Sized + Clone,
     {
-        AbsCSNode { a: self.clone() }
+        AbsNode { a: self.clone() }
     }
-    fn norm_sqr(&self) -> NormSqrCSNode<Self>
+    fn norm_sqr(&self) -> NormSqrNode<Self>
     where
         Self: Sized + Clone,
     {
-        NormSqrCSNode { a: self.clone() }
+        NormSqrNode { a: self.clone() }
     }
-    fn re(&self) -> RealCSNode<Self>
+    fn re(&self) -> RealNode<Self>
     where
         Self: Sized + Clone,
     {
-        RealCSNode { a: self.clone() }
+        RealNode { a: self.clone() }
     }
-    fn real(&self) -> RealCSNode<Self>
+    fn real(&self) -> RealNode<Self>
     where
         Self: Sized + Clone,
     {
-        RealCSNode { a: self.clone() }
+        RealNode { a: self.clone() }
     }
-    fn im(&self) -> ImagCSNode<Self>
+    fn im(&self) -> ImagNode<Self>
     where
         Self: Sized + Clone,
     {
-        ImagCSNode { a: self.clone() }
+        ImagNode { a: self.clone() }
     }
-    fn imag(&self) -> ImagCSNode<Self>
+    fn imag(&self) -> ImagNode<Self>
     where
         Self: Sized + Clone,
     {
-        ImagCSNode { a: self.clone() }
+        ImagNode { a: self.clone() }
     }
-    fn neg(&self) -> NegCCNode<Self>
+    fn neg(&self) -> NegNode<Self>
     where
         Self: Sized + Clone,
     {
-        NegCCNode { a: self.clone() }
+        NegNode { a: self.clone() }
     }
-    fn add<U>(&self, other: &U) -> AddCCCNode<Self, U>
+    fn add<U>(&self, other: &U) -> AddNode<Self, U>
     where
         Self: Sized + Clone,
-        U: CNode + Clone,
+        U: Node + Clone,
     {
-        AddCCCNode {
+        AddNode {
             a: self.clone(),
             b: other.clone(),
         }
     }
-    fn sub<U>(&self, other: &U) -> SubCCCNode<Self, U>
+    fn sub<U>(&self, other: &U) -> SubNode<Self, U>
     where
         Self: Sized + Clone,
-        U: CNode + Clone,
+        U: Node + Clone,
     {
-        SubCCCNode {
+        SubNode {
             a: self.clone(),
             b: other.clone(),
         }
     }
-    fn mul<U>(&self, other: &U) -> MulCCCNode<Self, U>
+    fn mul<U>(&self, other: &U) -> MulNode<Self, U>
     where
         Self: Sized + Clone,
-        U: CNode + Clone,
+        U: Node + Clone,
     {
-        MulCCCNode {
+        MulNode {
             a: self.clone(),
             b: other.clone(),
         }
     }
-    fn div<U>(&self, other: &U) -> DivCCCNode<Self, U>
+    fn div<U>(&self, other: &U) -> DivNode<Self, U>
     where
         Self: Sized + Clone,
-        U: CNode + Clone,
+        U: Node + Clone,
     {
-        DivCCCNode {
+        DivNode {
             a: self.clone(),
             b: other.clone(),
         }
     }
-    fn pow<U>(&self, other: &U) -> PowCCCNode<Self, U>
+    fn pow<U>(&self, other: &U) -> PowNode<Self, U>
     where
         Self: Sized + Clone,
-        U: CNode + Clone,
+        U: Node + Clone,
     {
-        PowCCCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn add_scalar<U>(&self, other: &U) -> AddCSCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        AddCSCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn sub_scalar<U>(&self, other: &U) -> SubCSCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        SubCSCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn mul_scalar<U>(&self, other: &U) -> MulCSCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        MulCSCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn div_scalar<U>(&self, other: &U) -> DivCSCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        DivCSCNode {
-            a: self.clone(),
-            b: other.clone(),
-        }
-    }
-    fn pow_scalar<U>(&self, other: &U) -> PowCSCNode<Self, U>
-    where
-        Self: Sized + Clone,
-        U: SNode + Clone,
-    {
-        PowCSCNode {
+        PowNode {
             a: self.clone(),
             b: other.clone(),
         }
@@ -327,9 +162,9 @@ impl Parameterized for ParameterNode {
         self.0.get(internal_par_name)
     }
 }
-impl SNode for ParameterNode {
-    fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<Scalar64> {
-        let p = self.get_par_by_name("parameter", pars).unwrap();
+impl Node for ParameterNode {
+    fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64> {
+        let p = CScalar64::new(self.get_par_by_name("parameter", pars).unwrap(), 0.0);
         vec![p; ds.len()]
     }
 }
@@ -356,7 +191,7 @@ impl Parameterized for ComplexParameterNode {
         self.0.get(internal_par_name)
     }
 }
-impl CNode for ComplexParameterNode {
+impl Node for ComplexParameterNode {
     fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64> {
         let p_re = self.get_par_by_name("parameter (re)", pars).unwrap();
         let p_im = self.get_par_by_name("parameter (im)", pars).unwrap();
@@ -366,29 +201,29 @@ impl CNode for ComplexParameterNode {
 }
 
 macro_rules! unary_op {
-    ($name:ident, $a:ident, $output:ident, $outtype:ty, $func:expr) => {
+    ($name:ident, $func:expr) => {
         #[derive(Clone)]
         pub struct $name<T>
         where
-            T: $a,
+            T: Node,
         {
             a: T,
         }
 
         impl<T> Dependent for $name<T>
         where
-            T: $a,
+            T: Node,
         {
             fn dependencies(&self) -> Vec<&dyn Resolvable> {
                 vec![&self.a]
             }
         }
-        impl<T> Resolvable for $name<T> where T: $a {}
-        impl<T> $output for $name<T>
+        impl<T> Resolvable for $name<T> where T: Node {}
+        impl<T> Node for $name<T>
         where
-            T: $a,
+            T: Node,
         {
-            fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<$outtype> {
+            fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64> {
                 let eval_a = self.a.eval(ds, pars);
 
                 eval_a.into_par_iter().map($func).collect()
@@ -398,12 +233,12 @@ macro_rules! unary_op {
 }
 
 macro_rules! binary_op {
-    ($name:ident, $a:ident, $b:ident, $output:ident, $outtype:ty, $func:expr) => {
+    ($name:ident, $func:expr) => {
         #[derive(Clone)]
         pub struct $name<T, U>
         where
-            T: $a,
-            U: $b,
+            T: Node,
+            U: Node,
         {
             a: T,
             b: U,
@@ -411,8 +246,8 @@ macro_rules! binary_op {
 
         impl<T, U> Dependent for $name<T, U>
         where
-            T: $a,
-            U: $b,
+            T: Node,
+            U: Node,
         {
             fn dependencies(&self) -> Vec<&dyn Resolvable> {
                 vec![&self.a, &self.b]
@@ -420,16 +255,16 @@ macro_rules! binary_op {
         }
         impl<T, U> Resolvable for $name<T, U>
         where
-            T: $a,
-            U: $b,
+            T: Node,
+            U: Node,
         {
         }
-        impl<T, U> $output for $name<T, U>
+        impl<T, U> Node for $name<T, U>
         where
-            T: $a,
-            U: $b,
+            T: Node,
+            U: Node,
         {
-            fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<$outtype> {
+            fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<CScalar64> {
                 let eval_a = self.a.eval(ds, pars);
                 let eval_b = self.b.eval(ds, pars);
 
@@ -439,83 +274,13 @@ macro_rules! binary_op {
     };
 }
 
-unary_op!(AbsSSNode, SNode, SNode, Scalar64, |a| f64::abs(a));
-unary_op!(NegSSNode, SNode, SNode, Scalar64, |a| -a);
-binary_op!(AddSSSNode, SNode, SNode, SNode, Scalar64, |(a, b)| a + b);
-binary_op!(SubSSSNode, SNode, SNode, SNode, Scalar64, |(a, b)| a - b);
-binary_op!(MulSSSNode, SNode, SNode, SNode, Scalar64, |(a, b)| a * b);
-binary_op!(DivSSSNode, SNode, SNode, SNode, Scalar64, |(a, b)| a / b);
-binary_op!(PowSSSNode, SNode, SNode, SNode, Scalar64, |(a, b)| {
-    f64::powf(a, b)
-});
-binary_op!(AddSCCNode, SNode, CNode, CNode, CScalar64, |(a, b)| a + b);
-binary_op!(SubSCCNode, SNode, CNode, CNode, CScalar64, |(a, b)| a - b);
-binary_op!(MulSCCNode, SNode, CNode, CNode, CScalar64, |(a, b)| a * b);
-binary_op!(DivSCCNode, SNode, CNode, CNode, CScalar64, |(a, b)| a / b);
-binary_op!(PowSCCNode, SNode, CNode, CNode, CScalar64, |(a, b)| {
-    f64::powc(a, b)
-});
-
-binary_op!(AddCSCNode, CNode, SNode, CNode, CScalar64, |(a, b)| a + b);
-binary_op!(SubCSCNode, CNode, SNode, CNode, CScalar64, |(a, b)| a - b);
-binary_op!(MulCSCNode, CNode, SNode, CNode, CScalar64, |(a, b)| a * b);
-binary_op!(DivCSCNode, CNode, SNode, CNode, CScalar64, |(a, b)| a / b);
-binary_op!(PowCSCNode, CNode, SNode, CNode, CScalar64, |(a, b)| {
-    CScalar64::powf(a, b)
-});
-
-unary_op!(AbsCSNode, CNode, SNode, Scalar64, |a| CScalar64::abs(a));
-unary_op!(NormSqrCSNode, CNode, SNode, Scalar64, |a| {
-    CScalar64::norm_sqr(&a)
-});
-unary_op!(RealCSNode, CNode, SNode, Scalar64, |a| CScalar64::re(a));
-unary_op!(ImagCSNode, CNode, SNode, Scalar64, |a| CScalar64::im(a));
-unary_op!(NegCCNode, CNode, CNode, CScalar64, |a| -a);
-binary_op!(AddCCCNode, CNode, CNode, CNode, CScalar64, |(a, b)| a + b);
-binary_op!(SubCCCNode, CNode, CNode, CNode, CScalar64, |(a, b)| a - b);
-binary_op!(MulCCCNode, CNode, CNode, CNode, CScalar64, |(a, b)| a * b);
-binary_op!(DivCCCNode, CNode, CNode, CNode, CScalar64, |(a, b)| a / b);
-binary_op!(PowCCCNode, CNode, CNode, CNode, CScalar64, |(a, b)| {
-    CScalar64::powc(a, b)
-});
-
-// #[derive(Clone)]
-// pub struct AddSSNode<T, U>
-// where
-//     T: SNode,
-//     U: SNode,
-// {
-//     a: T,
-//     b: U,
-// }
-//
-// impl<T, U> Dependent for AddSSNode<T, U>
-// where
-//     T: SNode,
-//     U: SNode,
-// {
-//     fn dependencies(&self) -> Vec<&dyn Resolvable> {
-//         vec![&self.a, &self.b]
-//     }
-// }
-// impl<T, U> Resolvable for AddSSNode<T, U>
-// where
-//     T: SNode,
-//     U: SNode,
-// {
-// }
-// impl<T, U> SNode for AddSSNode<T, U>
-// where
-//     T: SNode,
-//     U: SNode,
-// {
-//     fn eval(&self, ds: &Dataset, pars: &HashMap<String, f64>) -> Vec<Scalar64> {
-//         let eval_a = self.a.eval(ds, pars);
-//         let eval_b = self.b.eval(ds, pars);
-//
-//         (eval_a, eval_b)
-//             .into_par_iter()
-//             .map(|(val_a, val_b)| val_a + val_b)
-//             .collect()
-//     }
-// }
+unary_op!(AbsNode, |a| CScalar64::abs(a).into());
+unary_op!(NormSqrNode, |a| { CScalar64::norm_sqr(&a).into() });
+unary_op!(RealNode, |a| CScalar64::re(a).into());
+unary_op!(ImagNode, |a| CScalar64::im(a).into());
+unary_op!(NegNode, |a| -a);
+binary_op!(AddNode, |(a, b)| a + b);
+binary_op!(SubNode, |(a, b)| a - b);
+binary_op!(MulNode, |(a, b)| a * b);
+binary_op!(DivNode, |(a, b)| a / b);
+binary_op!(PowNode, |(a, b)| { CScalar64::powc(a, b) });
