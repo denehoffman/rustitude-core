@@ -34,9 +34,10 @@ pub type CVector64 = Array1<Complex64>;
 pub type Matrix64 = Array2<f64>;
 pub type CMatrix64 = Array2<Complex64>;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Dataset {
     size: usize,
+    weights: Vec<Scalar64>,
     scalar_map: HashMap<String, Vec<Scalar64>>,
     cscalar_map: HashMap<String, Vec<CScalar64>>,
     vector_map: HashMap<String, Vec<Vector64>>,
@@ -62,16 +63,27 @@ pub enum DatasetError {
 }
 
 impl Dataset {
-    pub fn from_size(size: usize) -> Dataset {
-        Dataset {
-            uuid: Uuid::new_v4(),
-            size,
-            ..Default::default()
+    pub fn from_size(size: usize, weights: Option<Vec<Scalar64>>) -> Dataset {
+        match weights {
+            Some(w) => Dataset {
+                size,
+                weights: w,
+                ..Default::default()
+            },
+            None => Dataset {
+                size,
+                weights: vec![1.0; size],
+                ..Default::default()
+            },
         }
     }
     pub fn len(&self) -> usize {
         self.size
     }
+    pub fn weights(&self) -> &Vec<Scalar64> {
+        &self.weights
+    }
+
     #[anyinput]
     pub fn scalar(&self, key: AnyString) -> Result<&Vec<Scalar64>, DatasetError> {
         self.scalar_map.get(key).ok_or(DatasetError::TypeError {

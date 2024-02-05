@@ -25,7 +25,8 @@ use crate::{node::Parameterized, prelude::*};
 /// properly.
 pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, DatasetError> {
     let dataframe = open_parquet(path).expect("Read error");
-    let mut dataset = Dataset::from_size(dataframe.height());
+    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
+    let mut dataset = Dataset::from_size(dataframe.height(), Some(weight));
     let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
     let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
     let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
@@ -44,8 +45,6 @@ pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, DatasetError> 
         let beam_p4 = scalars_to_momentum_par(e_beam, px_beam, py_beam, pz_beam);
         dataset.insert_vector("Beam P4", beam_p4)?;
     }
-    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
-    dataset.insert_scalar("Weight", weight)?;
     let e_finalstate = extract_vector("E_FinalState", &dataframe, ReadType::F32);
     let px_finalstate = extract_vector("Px_FinalState", &dataframe, ReadType::F32);
     let py_finalstate = extract_vector("Py_FinalState", &dataframe, ReadType::F32);
