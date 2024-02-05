@@ -16,7 +16,7 @@ exclude = ["convert", "data.*", "src/main.rs"]
 [dependencies]
 rayon = { version = "1.8.0" }
 approx = { version = "0.5.1", features = ["num-complex"] }
-argmin = "0.8.1"
+argmin = "0.9.0"
 argmin-math = "0.3.0"
 nalgebra = "0.32.3"
 ndarray = { version = "0.15.6", features = ["approx-0_5"] }
@@ -24,7 +24,7 @@ ndarray-linalg = "0.16.0"
 num = "0.4.1"
 num-complex = "0.4.4"
 num-traits = "0.2.17"
-polars = { version = "0.36.2", features = ["parquet", "describe"] }
+polars = { version = "0.37.0", features = ["parquet", "describe"] }
 sphrs = "0.2.2"
 thiserror = "1.0.51"
 derive_more = { version = "0.99.17", default-features = false, features = [
@@ -38,8 +38,8 @@ rustc-hash = "1.1.0"
 variantly = "0.4.0"
 anyinput = "0.1.6"
 dashmap = "5.5.3"
-derive_builder = "0.12.0"
-uuid = { version = "1.7.0", features = ["v4"] }
+derive_builder = "0.13.0"
+static_assertions = "1.1.0"
 [target.'cfg(target_os = "macos")'.dependencies]
 accelerate-src = "0.3.2"
 

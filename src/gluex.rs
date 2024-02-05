@@ -8,7 +8,6 @@ use ndarray_linalg::Inverse;
 use num_complex::Complex64;
 use rayon::prelude::*;
 use sphrs::{ComplexSH, Coordinates, SHEval};
-use uuid::Uuid;
 
 use crate::{node::Parameterized, prelude::*};
 

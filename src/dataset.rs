@@ -6,7 +6,6 @@ use rayon::prelude::*;
 use ndarray::{s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex64;
 use rustc_hash::FxHashMap as HashMap;
-use uuid::Uuid;
 
 use anyinput::anyinput;
 use thiserror::Error;
@@ -37,7 +36,6 @@ pub type CMatrix64 = Array2<Complex64>;
 
 #[derive(Default, Debug)]
 pub struct Dataset {
-    uuid: Uuid,
     size: usize,
     scalar_map: HashMap<String, Vec<Scalar64>>,
     cscalar_map: HashMap<String, Vec<CScalar64>>,
