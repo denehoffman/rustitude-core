@@ -26,8 +26,21 @@ use crate::{node::Parameterized, prelude::*};
 ///
 /// Will raise [`PolarsError`] in the event that any of the branches aren't read or converted
 /// properly.
-pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, DatasetError> {
-    let dataframe = open_parquet(path).expect("Read error");
+pub fn open_gluex(
+    path: &str,
+    polarized: bool,
+    mass_bin: (f64, f64),
+) -> Result<Dataset, DatasetError> {
+    let total_dataframe = open_parquet(path).expect("Read error");
+    let dataframe = total_dataframe
+        .lazy()
+        .filter(
+            col("M_FinalState")
+                .gt(mass_bin.0)
+                .and(col("M_FinalState").lt(mass_bin.1)),
+        )
+        .collect()
+        .unwrap();
     let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
     let mut dataset = Dataset::from_size(dataframe.height(), Some(weight));
     let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
