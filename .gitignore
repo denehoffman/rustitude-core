@@ -3,3 +3,5 @@
 *.parquet
 perf*
 *.svg
+callgrind.out.*
+cachegrind.out.*
