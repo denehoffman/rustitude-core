@@ -305,9 +305,9 @@ pub fn scalars_to_momentum(
 ) -> Vec<Vector64> {
     e_vec
         .into_iter()
-        .zip(px_vec.into_iter())
-        .zip(py_vec.into_iter())
-        .zip(pz_vec.into_iter())
+        .zip(px_vec)
+        .zip(py_vec)
+        .zip(pz_vec)
         .map(|(((e, px), py), pz)| Array1::from_vec(vec![e, px, py, pz]))
         .collect()
 }
@@ -333,7 +333,7 @@ pub fn vectors_to_momenta(
     pys_vec: Vec<Vector64>,
     pzs_vec: Vec<Vector64>,
 ) -> Vec<Vec<Vector64>> {
-    let data = vec![es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
+    let data = [es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
     let shape = data[0][0].shape();
     let dim = (data.len(), data[0].len(), shape[0]);
     let mut array3 = Array3::zeros(dim);
@@ -367,7 +367,7 @@ pub fn vectors_to_momenta_par(
     pys_vec: Vec<Vector64>,
     pzs_vec: Vec<Vector64>,
 ) -> Vec<Vec<Vector64>> {
-    let data = vec![es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
+    let data = [es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
     let shape = data[0][0].shape();
     let dim = (data.len(), data[0].len(), shape[0]);
     let mut array3 = Array3::zeros(dim);

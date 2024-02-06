@@ -1,11 +1,13 @@
 #![allow(unused_imports)]
-use std::{collections::HashMap, f64::consts::PI};
+use rustc_hash::FxHashMap as HashMap;
+use std::f64::consts::PI;
 
 use anyinput::anyinput;
 use nalgebra::Vector3;
 use ndarray::{array, linalg::Dot, Array1, Array2, Array3, Axis};
 use ndarray_linalg::Inverse;
 use num_complex::Complex64;
+use polars::prelude::*;
 use rayon::prelude::*;
 use sphrs::{ComplexSH, Coordinates, SHEval};
 
@@ -75,13 +77,9 @@ impl Default for ResonanceMass {
         }
     }
 }
-impl Dependent for ResonanceMass {
-    fn dependencies(&self) -> Vec<&dyn Resolvable> {
-        vec![]
-    }
-}
+impl Dependent for ResonanceMass {}
 impl Resolvable for ResonanceMass {
-    fn compute(&self, ds: &mut Dataset) -> () {
+    fn compute(&self, ds: &mut Dataset) {
         if ds.contains_scalar(&self.mass) {
             return;
         }
@@ -123,13 +121,9 @@ impl Default for HelicityVec {
         }
     }
 }
-impl Dependent for HelicityVec {
-    fn dependencies(&self) -> Vec<&dyn Resolvable> {
-        vec![]
-    }
-}
+impl Dependent for HelicityVec {}
 impl Resolvable for HelicityVec {
-    fn compute(&self, ds: &mut Dataset) -> () {
+    fn compute(&self, ds: &mut Dataset) {
         if ds.contains_vector(&self.x)
             && ds.contains_vector(&self.y)
             && ds.contains_vector(&self.z)
@@ -141,9 +135,10 @@ impl Resolvable for HelicityVec {
         let recoil_p4 = ds.vector("Recoil P4").unwrap();
         let decay1_p4 = ds.vector("Decay1 P4").unwrap();
         let decay2_p4 = ds.vector("Decay2 P4").unwrap();
+        #[allow(clippy::type_complexity)]
         let (x, (y, (z, v))): (
-            Vec<Array1<f64>>,
-            (Vec<Array1<f64>>, (Vec<Array1<f64>>, Vec<Array1<f64>>)),
+            Vec<Vector64>,
+            (Vec<Vector64>, (Vec<Vector64>, Vec<Vector64>)),
         ) = (beam_p4, recoil_p4, decay1_p4, decay2_p4)
             .into_par_iter()
             .map(|(beam_arr, recoil_arr, decay1_arr, decay2_arr)| {
@@ -188,24 +183,27 @@ impl Resolvable for HelicityVec {
 #[derive(Clone, Copy)]
 #[rustfmt::skip]
 pub enum Wave {
+    S, P, D, F,
     S0,
     Pn1, P0, P1,
     Dn2, Dn1, D0, D1, D2,
     Fn3, Fn2, Fn1, F0, F1, F2, F3,
 }
 
+#[rustfmt::skip]
 impl Wave {
     pub fn l(&self) -> i64 {
         match self {
-            Self::S0 => 0,
-            Self::Pn1 | Self::P0 | Self::P1 => 1,
-            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 => 2,
-            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 => 3,
+            Self::S0 | Self::S => 0,
+            Self::Pn1 | Self::P0 | Self::P1 | Self::P => 1,
+            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 | Self::D => 2,
+            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 | Self::F => 3,
         }
     }
     pub fn m(&self) -> i64 {
         match self {
-            Self::S0 | Self::P0 | Self::D0 | Self::F0 => 0,
+            Self::S | Self::P | Self::D | Self::F => 0,
+            Self::S0 | Self::P0 | Self::D0 | Self::F0 => 0, 
             Self::Pn1 | Self::Dn1 | Self::Fn1 => -1,
             Self::P1 | Self::D1 | Self::F1 => 1,
             Self::Dn2 | Self::Fn2 => -2,
@@ -216,13 +214,14 @@ impl Wave {
     }
 }
 
+#[rustfmt::skip]
 impl ToString for Wave {
     fn to_string(&self) -> String {
         let l_string = match self {
-            Self::S0 => "S",
-            Self::Pn1 | Self::P0 | Self::P1 => "P",
-            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 => "D",
-            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 => "F",
+            Self::S0 | Self::S => "S",
+            Self::Pn1 | Self::P0 | Self::P1 | Self::P => "P",
+            Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 | Self::D => "D",
+            Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 | Self::F => "F",
         };
         format!("{} {:+}", l_string, self.m())
     }
@@ -257,7 +256,7 @@ impl Dependent for Ylm {
     }
 }
 impl Resolvable for Ylm {
-    fn compute(&self, ds: &mut Dataset) -> () {
+    fn compute(&self, ds: &mut Dataset) {
         if ds.contains_cscalar(&self.ylm) {
             return;
         }
@@ -310,7 +309,7 @@ impl Dependent for Polarization {
 }
 
 impl Resolvable for Polarization {
-    fn compute(&self, ds: &mut Dataset) -> () {
+    fn compute(&self, ds: &mut Dataset) {
         if ds.contains_scalar(&self.big_phi) && ds.contains_scalar(&self.pgamma) {
             return;
         }
@@ -387,7 +386,7 @@ impl Dependent for Zlm {
     }
 }
 impl Resolvable for Zlm {
-    fn compute(&self, ds: &mut Dataset) -> () {
+    fn compute(&self, ds: &mut Dataset) {
         if ds.contains_cscalar(&self.zlm) {
             return;
         }
@@ -429,7 +428,15 @@ impl Node for Zlm {
 }
 
 #[derive(Clone)]
+pub struct AdlerZero {
+    pub s_0: f64,
+    pub s_norm: f64,
+}
+
+#[derive(Clone)]
 pub struct KMatrixConstants {
+    pub name: String,
+    pub res_names: Vec<String>,
     pub g: Array2<f64>,
     pub m: Array1<f64>,
     pub c: Array2<f64>,
@@ -438,6 +445,7 @@ pub struct KMatrixConstants {
     pub n_resonances: usize,
     pub n_channels: usize,
     pub wave: Wave,
+    pub adler_zero: Option<AdlerZero>,
 }
 
 impl KMatrixConstants {
@@ -495,6 +503,22 @@ pub struct BarrierFactor {
     mass: ResonanceMass,
 }
 
+impl BarrierFactor {
+    fn new(kmat_consts: KMatrixConstants) -> Self {
+        BarrierFactor {
+            barrier_factor: format!("Barrier Factor {}", kmat_consts.wave.to_string()),
+            constants: kmat_consts,
+            mass: ResonanceMass::default(),
+        }
+    }
+}
+
+impl From<KMatrixConstants> for BarrierFactor {
+    fn from(kmat_consts: KMatrixConstants) -> Self {
+        BarrierFactor::new(kmat_consts)
+    }
+}
+
 impl Dependent for BarrierFactor {
     fn dependencies(&self) -> Vec<&dyn Resolvable> {
         vec![&self.mass]
@@ -521,11 +545,7 @@ impl Resolvable for BarrierFactor {
             .unwrap();
     }
 }
-#[derive(Clone)]
-pub struct AdlerZero {
-    pub s_0: f64,
-    pub s_norm: f64,
-}
+
 #[derive(Clone)]
 pub struct FrozenKMatrix {
     pub inv_ikc_vec: String,
@@ -534,7 +554,33 @@ pub struct FrozenKMatrix {
     constants: KMatrixConstants,
     barrier_factor: BarrierFactor,
     mass: ResonanceMass,
-    adler_zero: Option<AdlerZero>,
+}
+
+impl FrozenKMatrix {
+    #[anyinput]
+    pub fn new(name: AnyString, selected_channel: usize, constants: KMatrixConstants) -> Self {
+        let barrier_factor = BarrierFactor::new(constants.clone());
+        let mass = ResonanceMass::default();
+        let mut mappings: HashMap<String, String> = HashMap::default();
+        for (i, res_name) in constants.res_names.iter().enumerate() {
+            mappings.insert(
+                format!("beta_{}_re", i),
+                format!("{}_{}_re", name, res_name),
+            );
+            mappings.insert(
+                format!("beta_{}_im", i),
+                format!("{}_{}_im", name, res_name),
+            );
+        }
+        FrozenKMatrix {
+            inv_ikc_vec: format!("{}_{}", constants.name, selected_channel),
+            mappings,
+            selected_channel,
+            constants,
+            barrier_factor,
+            mass,
+        }
+    }
 }
 
 impl Dependent for FrozenKMatrix {
@@ -567,7 +613,7 @@ impl Resolvable for FrozenKMatrix {
                             * bf[[j, a]]
                     },
                 );
-                let k_mat = match self.adler_zero {
+                let k_mat = match self.constants.adler_zero {
                     Some(AdlerZero { s_0, s_norm }) => {
                         Complex64::from((s - s_0) / s_norm) * k_ija.sum_axis(Axis(2))
                     }

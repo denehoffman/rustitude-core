@@ -1,5 +1,5 @@
-use num_complex::ComplexFloat;
-use std::collections::HashMap;
+use num_complex::{Complex64, ComplexFloat};
+use rustc_hash::FxHashMap as HashMap;
 
 use anyinput::anyinput;
 use rayon::prelude::*;
@@ -14,7 +14,9 @@ pub enum ParameterError {
 }
 
 pub trait Dependent {
-    fn dependencies(&self) -> Vec<&dyn Resolvable>;
+    fn dependencies(&self) -> Vec<&dyn Resolvable> {
+        vec![]
+    }
 }
 pub trait Resolvable: Dependent {
     #[allow(unused_variables)]
@@ -148,14 +150,10 @@ impl ParameterNode {
     pub fn new(name: AnyString) -> Self {
         let mut p = ParameterNode(HashMap::default());
         p.0.insert("parameter".to_string(), name.to_string());
-        return p;
+        p
     }
 }
-impl Dependent for ParameterNode {
-    fn dependencies(&self) -> Vec<&dyn Resolvable> {
-        vec![]
-    }
-}
+impl Dependent for ParameterNode {}
 impl Resolvable for ParameterNode {}
 impl Parameterized for ParameterNode {
     fn get_external_par_name(&self, internal_par_name: &str) -> Option<&String> {
@@ -177,14 +175,10 @@ impl ComplexParameterNode {
         let mut p = ComplexParameterNode(HashMap::default());
         p.0.insert("parameter (re)".to_string(), name_re.to_string());
         p.0.insert("parameter (im)".to_string(), name_im.to_string());
-        return p;
+        p
     }
 }
-impl Dependent for ComplexParameterNode {
-    fn dependencies(&self) -> Vec<&dyn Resolvable> {
-        vec![]
-    }
-}
+impl Dependent for ComplexParameterNode {}
 impl Resolvable for ComplexParameterNode {}
 impl Parameterized for ComplexParameterNode {
     fn get_external_par_name(&self, internal_par_name: &str) -> Option<&String> {
@@ -197,6 +191,15 @@ impl Node for ComplexParameterNode {
         let p_im = self.get_par_by_name("parameter (im)", pars).unwrap();
         let p = CScalar64::new(p_re, p_im);
         vec![p; ds.len()]
+    }
+}
+
+pub struct ConstantNode(Complex64);
+impl Dependent for ConstantNode {}
+impl Resolvable for ConstantNode {}
+impl Node for ConstantNode {
+    fn eval(&self, ds: &Dataset, _pars: &HashMap<String, f64>) -> Vec<CScalar64> {
+        vec![self.0; ds.len()]
     }
 }
 

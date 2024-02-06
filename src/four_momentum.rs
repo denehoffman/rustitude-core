@@ -270,6 +270,6 @@ impl Default for FourMomentum {
 
 impl<'a> std::iter::Sum<&'a FourMomentum> for FourMomentum {
     fn sum<I: Iterator<Item = &'a FourMomentum>>(iter: I) -> Self {
-        iter.fold(FourMomentum::default(), |a, b| a + b.clone())
+        iter.fold(FourMomentum::default(), |a, b| a + *b)
     }
 }
