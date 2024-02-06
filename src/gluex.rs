@@ -3,6 +3,7 @@ use rustc_hash::FxHashMap as HashMap;
 use std::f64::consts::PI;
 
 use anyinput::anyinput;
+use derive_builder::Builder;
 use nalgebra::Vector3;
 use ndarray::{array, linalg::Dot, Array1, Array2, Array3, Axis};
 use ndarray_linalg::Inverse;
