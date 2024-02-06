@@ -57,3 +57,7 @@ intel-mkl-system = ["blas", "ndarray-linalg/intel-mkl-system"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]
+
+[profile.release]
+codegen-units = 1
+debug = true
