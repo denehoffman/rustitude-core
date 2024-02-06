@@ -80,8 +80,17 @@ impl Dataset {
     pub fn len(&self) -> usize {
         self.size
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
     pub fn weights(&self) -> &Vec<Scalar64> {
         &self.weights
+    }
+
+    pub fn weighted_len(&self) -> f64 {
+        self.weights.iter().sum()
     }
 
     #[anyinput]

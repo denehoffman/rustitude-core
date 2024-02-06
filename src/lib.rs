@@ -11,5 +11,9 @@ pub mod prelude {
         DatasetError, Matrix64, ReadType, Scalar64, Vector64,
     };
     pub use crate::four_momentum::FourMomentum;
-    pub use crate::node::{Dependent, Node, Parameterized, Resolvable};
+    pub use crate::likelihood::{Parameter, EML};
+    pub use crate::node::{
+        ComplexParameterNode, Dependent, Node, ParameterNode, Parameterized, Resolvable,
+    };
+    pub use crate::par;
 }
