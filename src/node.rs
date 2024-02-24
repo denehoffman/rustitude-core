@@ -194,12 +194,23 @@ impl Node for ComplexParameterNode {
     }
 }
 
+#[derive(Clone)]
 pub struct ConstantNode(Complex64);
 impl Dependent for ConstantNode {}
 impl Resolvable for ConstantNode {}
 impl Node for ConstantNode {
     fn eval(&self, ds: &Dataset, _pars: &HashMap<String, f64>) -> Vec<CScalar64> {
         vec![self.0; ds.len()]
+    }
+}
+impl From<Complex64> for ConstantNode {
+    fn from(value: Complex64) -> Self {
+        ConstantNode(value)
+    }
+}
+impl From<f64> for ConstantNode {
+    fn from(value: f64) -> Self {
+        ConstantNode(value.into())
     }
 }
 

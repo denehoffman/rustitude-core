@@ -26,12 +26,13 @@ use crate::{node::Parameterized, prelude::*};
 ///
 /// Will raise [`PolarsError`] in the event that any of the branches aren't read or converted
 /// properly.
+#[anyinput]
 pub fn open_gluex(
-    path: &str,
+    path: AnyPath,
     polarized: bool,
     mass_bin: (f64, f64),
 ) -> Result<Dataset, DatasetError> {
-    let total_dataframe = open_parquet(path).expect("Read error");
+    let total_dataframe = open_parquet(path.to_str().unwrap()).expect("Read error");
     let dataframe = total_dataframe
         .lazy()
         .filter(

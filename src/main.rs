@@ -40,52 +40,116 @@ fn generate_bin_edges(min: f64, max: f64, num_bins: usize) -> Vec<(f64, f64)> {
         .collect()
 }
 fn main() {
-    let zlm_s0_plus = Zlm::new(Wave::S0, Reflectivity::Positive);
-    let zlm_d2_plus = Zlm::new(Wave::D2, Reflectivity::Positive);
-    let par_s0_plus = ComplexParameterNode::new("S0+ re", "S0+ im");
-    let par_d2_plus = ComplexParameterNode::new("D2+ re", "D2+ im");
-    let pos_re = zlm_s0_plus
-        .real()
-        .mul(&par_s0_plus)
-        .add(&zlm_d2_plus.real().mul(&par_d2_plus));
+    let zlm_s0_plus_real = AmplitudeBuilder::default()
+        .name("Zlm S0+")
+        .expr(Zlm::new(Wave::S0, Reflectivity::Positive).real())
+        .build()
+        .unwrap();
 
-    let pos_im = zlm_s0_plus
-        .imag()
-        .mul(&par_s0_plus)
-        .add(&zlm_d2_plus.imag().mul(&par_d2_plus));
+    let zlm_s0_plus_imag = AmplitudeBuilder::default()
+        .name("Zlm S0+")
+        .expr(Zlm::new(Wave::S0, Reflectivity::Positive).imag())
+        .build()
+        .unwrap();
 
-    let amp = pos_re.norm_sqr().add(&pos_im.norm_sqr());
+    let zlm_d2_plus_real = AmplitudeBuilder::default()
+        .name("Zlm D2+")
+        .expr(Zlm::new(Wave::D2, Reflectivity::Positive).real())
+        .build()
+        .unwrap();
 
-    let edges = generate_bin_edges(1.0, 2.0, 40);
-    let now = Instant::now();
-    for bin in &edges {
-        let dataset = open_gluex("data_pol.parquet", true, *bin).unwrap();
-        let montecarlo = open_gluex("accmc_pol.parquet", true, *bin).unwrap();
-        let eml = EML::new(
-            dataset,
-            montecarlo,
-            Box::new(amp.clone()),
-            Box::new(amp.clone()),
-            vec![
-                par!("S0+ re"),
-                par!("S0+ im", 0.0),
-                par!("D2+ re"),
-                par!("D2+ im"),
-            ],
-        );
-        let solver = NelderMead::new(simplex(vec![100.0, 100.0, 100.0], 10.0));
-        let res = Executor::new(eml, solver)
-            .configure(|state| state.max_iters(400))
-            .run()
-            .unwrap();
-        let best_vec = res.state().get_best_param().unwrap();
-        println!(
-            "Bin [{}, {}]: (S0+ re, D2+ re, D2+ im) = ({}, {}, {})",
-            bin.0, bin.1, best_vec[0], best_vec[1], best_vec[2]
-        );
-    }
-    let elapsed = now.elapsed();
-    println!("Total time: {:.2?}", elapsed);
+    let zlm_d2_plus_imag = AmplitudeBuilder::default()
+        .name("Zlm D2+")
+        .expr(Zlm::new(Wave::D2, Reflectivity::Positive).imag())
+        .build()
+        .unwrap();
+
+    let pos_re = cohsum!(zlm_s0_plus_real, zlm_d2_plus_real);
+    let pos_im = cohsum!(zlm_s0_plus_imag, zlm_d2_plus_imag);
+
+    let manager = manager!(pos_re, pos_im);
+
+    // let zlm_s0_plus = Zlm::new(Wave::S0, Reflectivity::Positive);
+    // let zlm_d2_plus = Zlm::new(Wave::D2, Reflectivity::Positive);
+    // let par_s0_plus = ComplexParameterNode::new("S0+ re", "S0+ im");
+    // let par_d2_plus = ComplexParameterNode::new("D2+ re", "D2+ im");
+    // let pos_re = zlm_s0_plus
+    //     .real()
+    //     .mul(&par_s0_plus)
+    //     .add(&zlm_d2_plus.real().mul(&par_d2_plus));
+    //
+    // let pos_im = zlm_s0_plus
+    //     .imag()
+    //     .mul(&par_s0_plus)
+    //     .add(&zlm_d2_plus.imag().mul(&par_d2_plus));
+    //
+    // let amp = pos_re.norm_sqr().add(&pos_im.norm_sqr());
+    // let amp_s0_plus = zlm_s0_plus
+    //     .real()
+    //     .mul(&par_s0_plus)
+    //     .add(&zlm_s0_plus.imag().mul(&par_s0_plus))
+    //     .norm_sqr();
+    //
+    // let amp_d2_plus = zlm_d2_plus
+    //     .real()
+    //     .mul(&par_d2_plus)
+    //     .add(&zlm_d2_plus.imag().mul(&par_d2_plus))
+    //     .norm_sqr();
+    //
+    // let edges = generate_bin_edges(1.0, 2.0, 40);
+    // let mut tot: Vec<f64> = Vec::new();
+    // let now = Instant::now();
+    // for bin in &edges {
+    //     let mut dataset = open_gluex("data_pol.parquet", true, *bin).unwrap();
+    //     let mut montecarlo = open_gluex("accmc_pol.parquet", true, *bin).unwrap();
+    //     amp.resolve(&mut dataset);
+    //     amp.resolve(&mut montecarlo);
+    //     let eml = EML::new(
+    //         &dataset,
+    //         &montecarlo,
+    //         amp.clone(),
+    //         vec![
+    //             par!("S0+ re"),
+    //             par!("S0+ im", 0.0),
+    //             par!("D2+ re"),
+    //             par!("D2+ im"),
+    //         ],
+    //     );
+    //     let solver = NelderMead::new(simplex(vec![100.0, 100.0, 100.0], 10.0));
+    //     let res = Executor::new(eml.clone(), solver)
+    //         .configure(|state| state.max_iters(400))
+    //         .run()
+    //         .unwrap();
+    //     let best_vec = res.state().get_best_param().unwrap().clone();
+    //     println!(
+    //         "Bin [{}, {}]: (S0+ re, D2+ re, D2+ im) = ({}, {}, {})",
+    //         bin.0, bin.1, best_vec[0], best_vec[1], best_vec[2]
+    //     );
+    //     let mag_tot: f64 = amp
+    //         .eval(&montecarlo, &eml.get_params(&best_vec))
+    //         .iter()
+    //         .zip(montecarlo.weights())
+    //         .map(|(v, w)| v.re * w)
+    //         .sum();
+    //     tot.push(mag_tot);
+    //     let mag_s0_plus: f64 = amp_s0_plus
+    //         .eval(&montecarlo, &eml.get_params(&best_vec))
+    //         .iter()
+    //         .zip(montecarlo.weights())
+    //         .map(|(v, w)| v.re * w)
+    //         .sum();
+    //     let mag_d2_plus: f64 = amp_d2_plus
+    //         .eval(&montecarlo, &eml.get_params(&best_vec))
+    //         .iter()
+    //         .zip(montecarlo.weights())
+    //         .map(|(v, w)| v.re * w)
+    //         .sum();
+    //     println!("S0+: {}", mag_s0_plus);
+    //     println!("D2+: {}", mag_d2_plus);
+    // }
+    // let elapsed = now.elapsed();
+    // println!("Total time: {:.2?}", elapsed);
+    // dbg!(tot);
 
     // KMatrix
     // let f0 = KMatrixConstants {

@@ -6,56 +6,39 @@ use anyinput::anyinput;
 use argmin::core::{CostFunction, Error};
 use rayon::prelude::*;
 
-use crate::{dataset::Dataset, node::Node};
-
-#[macro_export]
-macro_rules! par {
-    ($name:expr, $value:expr) => {
-        Parameter::Fixed($name.to_string(), $value)
-    };
-    ($name:expr) => {
-        Parameter::Free($name.to_string())
-    };
-}
-
-pub struct EML {
-    data: Dataset,
-    montecarlo: Dataset,
-    amplitude_data: Box<dyn Node>,
-    amplitude_montecarlo: Box<dyn Node>,
-    parameters: Vec<Parameter>,
-}
+use crate::{amplitude::Parameter, dataset::Dataset, node::Node};
 
 #[derive(Clone)]
-pub enum Parameter {
-    Free(String),
-    Fixed(String, f64),
+pub struct EML<'a, 'b, N>
+where
+    N: Node + Clone,
+{
+    pub data: &'a Dataset,
+    pub montecarlo: &'b Dataset,
+    pub amplitude: N,
+    pub parameters: Vec<Parameter>,
 }
 
-impl EML {
+impl<'a, 'b, N> EML<'a, 'b, N>
+where
+    N: Node + Clone,
+{
     #[anyinput]
     pub fn new(
-        data: Dataset,
-        montecarlo: Dataset,
-        amplitude_data: Box<dyn Node>,
-        amplitude_montecarlo: Box<dyn Node>,
+        data: &'a Dataset,
+        montecarlo: &'b Dataset,
+        amplitude: N,
         parameters: Vec<Parameter>,
     ) -> Self {
-        let mut eml_instance = EML {
+        EML {
             data,
             montecarlo,
-            amplitude_data,
-            amplitude_montecarlo,
+            amplitude: amplitude.clone(),
             parameters,
-        };
-        eml_instance.amplitude_data.resolve(&mut eml_instance.data);
-        eml_instance
-            .amplitude_montecarlo
-            .resolve(&mut eml_instance.montecarlo);
-        eml_instance
+        }
     }
 
-    fn get_values(&self, vals: &Vec<f64>) -> HashMap<String, f64> {
+    pub fn get_params(&self, vals: &[f64]) -> HashMap<String, f64> {
         let mut result = HashMap::default();
         let mut val_iter = vals.iter().cloned().collect::<VecDeque<f64>>();
         for param in &self.parameters {
@@ -76,21 +59,24 @@ impl EML {
     }
 }
 
-impl CostFunction for EML {
+impl<'a, 'b, N> CostFunction for EML<'a, 'b, N>
+where
+    N: Node + Clone,
+{
     type Param = Vec<f64>;
     type Output = f64;
     fn cost(&self, param: &Self::Param) -> Result<Self::Output, Error> {
-        let pars = self.get_values(param);
+        let pars = self.get_params(param);
         let fn_data: f64 = self
-            .amplitude_data
-            .eval(&self.data, &pars)
+            .amplitude
+            .eval(self.data, &pars)
             .into_par_iter()
             .zip(self.data.weights())
             .map(|(val, w)| val.re.ln() * w)
             .sum();
         let fn_montecarlo: f64 = self
-            .amplitude_montecarlo
-            .eval(&self.montecarlo, &pars)
+            .amplitude
+            .eval(self.montecarlo, &pars)
             .into_par_iter()
             .zip(self.data.weights())
             .map(|(val, w)| val.re * w)
