@@ -6,10 +6,10 @@ use rayon::prelude::*;
 use ndarray::{s, Array1, Array2, Array3, Axis, Zip};
 use num_complex::Complex64;
 use rustc_hash::FxHashMap as HashMap;
-use uuid::Uuid;
 
 use anyinput::anyinput;
 use thiserror::Error;
+use uuid::Uuid;
 use variantly::Variantly;
 
 #[derive(Debug, Copy, Clone, Variantly)]
@@ -35,7 +35,7 @@ pub type CVector64 = Array1<Complex64>;
 pub type Matrix64 = Array2<f64>;
 pub type CMatrix64 = Array2<Complex64>;
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Dataset {
     uuid: Uuid,
     size: usize,
@@ -68,12 +68,26 @@ impl Dataset {
         Dataset {
             uuid: Uuid::new_v4(),
             size,
-            ..Default::default()
+            scalar_map: HashMap::default(),
+            cscalar_map: HashMap::default(),
+            vector_map: HashMap::default(),
+            cvector_map: HashMap::default(),
+            matrix_map: HashMap::default(),
+            cmatrix_map: HashMap::default(),
         }
     }
+
+    pub fn get_uuid(&self) -> Uuid {
+        self.uuid
+    }
+
     pub fn len(&self) -> usize {
         self.size
     }
+    pub fn is_empty(&self) -> bool {
+        self.size == 0
+    }
+
     #[anyinput]
     pub fn scalar(&self, key: AnyString) -> Result<&Vec<Scalar64>, DatasetError> {
         self.scalar_map.get(key).ok_or(DatasetError::TypeError {
@@ -286,9 +300,9 @@ pub fn scalars_to_momentum(
 ) -> Vec<Vector64> {
     e_vec
         .into_iter()
-        .zip(px_vec.into_iter())
-        .zip(py_vec.into_iter())
-        .zip(pz_vec.into_iter())
+        .zip(px_vec)
+        .zip(py_vec)
+        .zip(pz_vec)
         .map(|(((e, px), py), pz)| Array1::from_vec(vec![e, px, py, pz]))
         .collect()
 }
@@ -314,7 +328,7 @@ pub fn vectors_to_momenta(
     pys_vec: Vec<Vector64>,
     pzs_vec: Vec<Vector64>,
 ) -> Vec<Vec<Vector64>> {
-    let data = vec![es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
+    let data = [es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
     let shape = data[0][0].shape();
     let dim = (data.len(), data[0].len(), shape[0]);
     let mut array3 = Array3::zeros(dim);
@@ -348,7 +362,7 @@ pub fn vectors_to_momenta_par(
     pys_vec: Vec<Vector64>,
     pzs_vec: Vec<Vector64>,
 ) -> Vec<Vec<Vector64>> {
-    let data = vec![es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
+    let data = [es_vec, pxs_vec, pys_vec, pzs_vec]; // (component, event, particle)
     let shape = data[0][0].shape();
     let dim = (data.len(), data[0].len(), shape[0]);
     let mut array3 = Array3::zeros(dim);
