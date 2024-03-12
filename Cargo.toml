@@ -16,15 +16,13 @@ exclude = ["convert", "data.*", "src/main.rs"]
 [dependencies]
 rayon = { version = "1.8.0" }
 approx = { version = "0.5.1", features = ["num-complex"] }
-argmin = "0.8.1"
-argmin-math = "0.3.0"
+argmin = "0.10.0"
+argmin-math = "0.4.0"
 nalgebra = "0.32.3"
-ndarray = { version = "0.15.6", features = ["approx-0_5"] }
-ndarray-linalg = "0.16.0"
 num = "0.4.1"
 num-complex = "0.4.4"
 num-traits = "0.2.17"
-polars = { version = "0.36.2", features = ["parquet", "describe"] }
+polars = { version = "0.38.2", features = ["parquet"] }
 sphrs = "0.2.2"
 thiserror = "1.0.51"
 derive_more = { version = "0.99.17", default-features = false, features = [
@@ -37,22 +35,15 @@ parking_lot = "0.12.1"
 rustc-hash = "1.1.0"
 variantly = "0.4.0"
 anyinput = "0.1.6"
-dashmap = "5.5.3"
-derive_builder = "0.12.0"
 uuid = { version = "1.7.0", features = ["v4"] }
-[target.'cfg(target_os = "macos")'.dependencies]
-accelerate-src = "0.3.2"
 
-[features]
-default = []
-blas = ["ndarray/blas"]
-openblas-static = ["blas", "ndarray-linalg/openblas-static"]
-openblas-system = ["blas", "ndarray-linalg/openblas-system"]
-netlib-static = ["blas", "ndarray-linalg/netlib-static"]
-netlib-system = ["blas", "ndarray-linalg/netlib-system"]
-intel-mkl-static = ["blas", "ndarray-linalg/intel-mkl-static"]
-intel-mkl-system = ["blas", "ndarray-linalg/intel-mkl-system"]
-# rayon = ["rayon_"]
+[profile.release]
+lto = true
+codegen-units = 1
+panic = "abort"
+debug = true
+# debug = false
+# strip = true
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]

@@ -1,6 +1,8 @@
-use nalgebra::Vector3;
-use ndarray::{array, Array1, Array2};
-use std::ops::{Add, Sub};
+use nalgebra::{Matrix4, Vector3, Vector4};
+use std::{
+    fmt::Display,
+    ops::{Add, Sub},
+};
 
 #[derive(Debug, Clone, PartialEq, Copy)]
 pub struct FourMomentum {
@@ -8,6 +10,12 @@ pub struct FourMomentum {
     pub px: f64,
     pub py: f64,
     pub pz: f64,
+}
+
+impl Display for FourMomentum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}, ({}, {}, {})]", self.e, self.px, self.py, self.pz)
+    }
 }
 
 impl FourMomentum {
@@ -30,20 +38,6 @@ impl FourMomentum {
         //!
         //! Components are listed in the order $` (E, p_x, p_y, p_z) `$
         Self { e, px, py, pz }
-    }
-
-    pub fn to_array(&self) -> Array1<f64> {
-        //! Turns a [`FourMomentum`] into a [`ndarray::Array1<f64>`]
-        //!
-        //! # Examples
-        //! ```
-        //! use rustitude::prelude::*;
-        //! use ndarray::array;
-        //!
-        //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
-        //! assert_eq!(vec_a.to_array(), array![20.0, 1.0, 0.2, -0.1]);
-        //! ```
-        array![self.e, self.px, self.py, self.pz]
     }
 
     pub fn momentum(&self) -> Vector3<f64> {
@@ -95,7 +89,7 @@ impl FourMomentum {
         self.momentum() / self.e
     }
 
-    pub fn boost_matrix(&self) -> Array2<f64> {
+    pub fn boost_matrix(&self) -> Matrix4<f64> {
         //! Construct the Lorentz boost matrix $`\mathbf{\Lambda}`$ where
         //!
         //! ```math
@@ -111,28 +105,24 @@ impl FourMomentum {
         let b = self.beta3();
         let b2 = b.dot(&b);
         let g = 1.0 / (1.0 - b2).sqrt();
-        let out = array![
-            [g, -g * b[0], -g * b[1], -g * b[2]],
-            [
-                -g * b[0],
-                1.0 + (g - 1.0) * b[0] * b[0] / b2,
-                (g - 1.0) * b[0] * b[1] / b2,
-                (g - 1.0) * b[0] * b[2] / b2
-            ],
-            [
-                -g * b[1],
-                (g - 1.0) * b[1] * b[0] / b2,
-                1.0 + (g - 1.0) * b[1] * b[1] / b2,
-                (g - 1.0) * b[1] * b[2] / b2
-            ],
-            [
-                -g * b[2],
-                (g - 1.0) * b[2] * b[0] / b2,
-                (g - 1.0) * b[2] * b[1] / b2,
-                1.0 + (g - 1.0) * b[2] * b[2] / b2
-            ]
-        ];
-        out
+        Matrix4::new(
+            g,
+            -g * b[0],
+            -g * b[1],
+            -g * b[2],
+            -g * b[0],
+            1.0 + (g - 1.0) * b[0] * b[0] / b2,
+            (g - 1.0) * b[0] * b[1] / b2,
+            (g - 1.0) * b[0] * b[2] / b2,
+            -g * b[1],
+            (g - 1.0) * b[1] * b[0] / b2,
+            1.0 + (g - 1.0) * b[1] * b[1] / b2,
+            (g - 1.0) * b[1] * b[2] / b2,
+            -g * b[2],
+            (g - 1.0) * b[2] * b[0] / b2,
+            (g - 1.0) * b[2] * b[1] / b2,
+            1.0 + (g - 1.0) * b[2] * b[2] / b2,
+        )
     }
 
     pub fn boost_along(&self, other: &Self) -> Self {
@@ -155,18 +145,24 @@ impl FourMomentum {
         //! assert_abs_diff_eq!(vec_a_COM.pz, 0.0, epsilon = 1e-15);
         //! ```
         let m_boost = other.boost_matrix();
-        m_boost.dot(&self.to_array()).into()
+        (m_boost * Vector4::<f64>::from(self)).into()
     }
 }
 
-impl From<FourMomentum> for Array1<f64> {
+impl From<FourMomentum> for Vector4<f64> {
     fn from(val: FourMomentum) -> Self {
-        array![val.e, val.px, val.py, val.pz]
+        Vector4::new(val.e, val.px, val.py, val.pz)
     }
 }
 
-impl From<Array1<f64>> for FourMomentum {
-    fn from(value: Array1<f64>) -> Self {
+impl From<&FourMomentum> for Vector4<f64> {
+    fn from(val: &FourMomentum) -> Self {
+        Vector4::new(val.e, val.px, val.py, val.pz)
+    }
+}
+
+impl From<Vector4<f64>> for FourMomentum {
+    fn from(value: Vector4<f64>) -> Self {
         Self {
             e: value[0],
             px: value[1],
@@ -176,8 +172,8 @@ impl From<Array1<f64>> for FourMomentum {
     }
 }
 
-impl From<&Array1<f64>> for FourMomentum {
-    fn from(value: &Array1<f64>) -> Self {
+impl From<&Vector4<f64>> for FourMomentum {
+    fn from(value: &Vector4<f64>) -> Self {
         Self {
             e: value[0],
             px: value[1],

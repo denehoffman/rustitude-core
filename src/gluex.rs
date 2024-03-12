@@ -1,64 +1,200 @@
-#![allow(unused_imports)]
-use rustc_hash::FxHashMap as HashMap;
-use std::{f64::consts::PI, fmt::Display};
-use uuid::Uuid;
+use std::{f64::consts::PI, fmt::Display, fs::File};
 
-use anyinput::anyinput;
-use nalgebra::{ComplexField, Vector3};
-use ndarray::{array, linalg::Dot, Array1, Array2, Array3, Axis};
-use ndarray_linalg::Inverse;
+use crate::{
+    dataset::{
+        extract_scalar, extract_vector, scalars_to_momentum, vectors_to_momenta, Dataset, Event,
+        ReadType,
+    },
+    prelude::FourMomentum,
+};
+
+use nalgebra::{ComplexField, SMatrix, SVector, Vector3};
 use num_complex::Complex64;
+use polars::prelude::*;
 use rayon::prelude::*;
 use sphrs::{ComplexSH, Coordinates, SHEval};
-use std::iter::repeat;
 
-use crate::prelude::*;
+pub trait Weight {
+    fn weight(&self) -> &f64;
+}
 
-/// Open a `GlueX` ROOT data file (flat tree) by `path`. `polarized` is a flag which is `true` if the
-/// data file has polarization information included in the `"Px_Beam"` and `"Py_Beam"` branches.
-///
-/// # Panics
-///
-/// Panics if it can't find any of the required branches, or if they contain data with an
-/// unexpected type.
-///
-/// # Errors
-///
-/// Will raise [`PolarsError`] in the event that any of the branches aren't read or converted
-/// properly.
-pub fn open_gluex(path: &str, polarized: bool) -> Result<Dataset, DatasetError> {
-    let dataframe = open_parquet(path).expect("Read error");
-    let mut dataset = Dataset::from_size(dataframe.height());
+pub trait BeamP4 {
+    fn beam_p4(&self) -> &FourMomentum;
+}
+
+pub trait RecoilP4 {
+    fn recoil_p4(&self) -> &FourMomentum;
+}
+
+pub trait DaughterP4s {
+    fn daughter_p4s(&self) -> &Vec<FourMomentum>;
+}
+
+pub trait Polarized {
+    fn eps(&self) -> &Vector3<f64>;
+}
+
+#[derive(Debug)]
+pub struct GlueXEvent {
+    weight: f64,
+    beam_p4: FourMomentum,
+    recoil_p4: FourMomentum,
+    daughter_p4s: Vec<FourMomentum>,
+}
+impl Event for GlueXEvent {}
+impl Weight for GlueXEvent {
+    fn weight(&self) -> &f64 {
+        &self.weight
+    }
+}
+impl BeamP4 for GlueXEvent {
+    fn beam_p4(&self) -> &FourMomentum {
+        &self.beam_p4
+    }
+}
+impl RecoilP4 for GlueXEvent {
+    fn recoil_p4(&self) -> &FourMomentum {
+        &self.recoil_p4
+    }
+}
+impl DaughterP4s for GlueXEvent {
+    fn daughter_p4s(&self) -> &Vec<FourMomentum> {
+        &self.daughter_p4s
+    }
+}
+impl Display for GlueXEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Weight: {}", self.weight)?;
+        writeln!(f, "Beam P4: {}", self.beam_p4)?;
+        writeln!(f, "Recoil P4: {}", self.beam_p4)?;
+        writeln!(f, "Daughters:")?;
+        for (i, p4) in self.daughter_p4s.iter().enumerate() {
+            writeln!(f, "\t{i} -> {p4}")?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub struct GlueXPolarizedEvent {
+    weight: f64,
+    beam_p4: FourMomentum,
+    recoil_p4: FourMomentum,
+    daughter_p4s: Vec<FourMomentum>,
+    eps: Vector3<f64>,
+}
+impl Event for GlueXPolarizedEvent {}
+impl Weight for GlueXPolarizedEvent {
+    fn weight(&self) -> &f64 {
+        &self.weight
+    }
+}
+impl BeamP4 for GlueXPolarizedEvent {
+    fn beam_p4(&self) -> &FourMomentum {
+        &self.beam_p4
+    }
+}
+impl RecoilP4 for GlueXPolarizedEvent {
+    fn recoil_p4(&self) -> &FourMomentum {
+        &self.recoil_p4
+    }
+}
+impl DaughterP4s for GlueXPolarizedEvent {
+    fn daughter_p4s(&self) -> &Vec<FourMomentum> {
+        &self.daughter_p4s
+    }
+}
+impl Polarized for GlueXPolarizedEvent {
+    fn eps(&self) -> &Vector3<f64> {
+        &self.eps
+    }
+}
+impl Display for GlueXPolarizedEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Weight: {}", self.weight)?;
+        writeln!(f, "Beam P4: {}", self.beam_p4)?;
+        writeln!(f, "Recoil P4: {}", self.beam_p4)?;
+        writeln!(f, "Daughters:")?;
+        for (i, p4) in self.daughter_p4s.iter().enumerate() {
+            writeln!(f, "\t{i} -> {p4}")?;
+        }
+        writeln!(
+            f,
+            "EPS: [{}, {}, {}]",
+            self.eps[0], self.eps[1], self.eps[2]
+        )?;
+        Ok(())
+    }
+}
+
+// NOTE TO SELF: for now we'll assume these are COM boosted, but we can add in a thing to do it
+// automatically later, maybe a COM boost function
+pub fn open_gluex(path: &str) -> Dataset<GlueXEvent> {
+    let file = File::open(path).expect("Open Error");
+    let dataframe = ParquetReader::new(file).finish().expect("Read Error");
     let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
     let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
     let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
     let pz_beam = extract_scalar("Pz_Beam", &dataframe, ReadType::F32);
-    if polarized {
-        let zero_vec = vec![0.0; e_beam.len()];
-        let beam_p4 = scalars_to_momentum_par(e_beam.clone(), zero_vec.clone(), zero_vec, e_beam);
-        let eps = px_beam
-            .into_par_iter()
-            .zip(py_beam.into_par_iter())
-            .map(|(px, py)| array![px, py, 0.0])
-            .collect();
-        dataset.insert_vector("Beam P4", beam_p4)?;
-        dataset.insert_vector("EPS", eps)?;
-    } else {
-        let beam_p4 = scalars_to_momentum_par(e_beam, px_beam, py_beam, pz_beam);
-        dataset.insert_vector("Beam P4", beam_p4)?;
-    }
-    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
-    dataset.insert_scalar("Weight", weight)?;
     let e_finalstate = extract_vector("E_FinalState", &dataframe, ReadType::F32);
     let px_finalstate = extract_vector("Px_FinalState", &dataframe, ReadType::F32);
     let py_finalstate = extract_vector("Py_FinalState", &dataframe, ReadType::F32);
     let pz_finalstate = extract_vector("Pz_FinalState", &dataframe, ReadType::F32);
-    let final_state_p4 =
-        vectors_to_momenta_par(e_finalstate, px_finalstate, py_finalstate, pz_finalstate);
-    dataset.insert_vector("Recoil P4", final_state_p4[0].clone())?;
-    dataset.insert_vector("Decay1 P4", final_state_p4[1].clone())?;
-    dataset.insert_vector("Decay2 P4", final_state_p4[2].clone())?;
-    Ok(dataset)
+    let beam_four_momentum = scalars_to_momentum(e_beam, px_beam, py_beam, pz_beam);
+    let final_state_four_momentum =
+        vectors_to_momenta(e_finalstate, px_finalstate, py_finalstate, pz_finalstate);
+    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
+    let mut dataset = Dataset::new();
+    dataset.events = (beam_four_momentum, final_state_four_momentum, weight)
+        .into_par_iter()
+        .map(|(beam_p4, fs, weight)| GlueXEvent {
+            weight,
+            beam_p4,
+            recoil_p4: fs[0],
+            daughter_p4s: fs[1..].to_vec(),
+        })
+        .collect();
+    dataset
+}
+
+pub fn open_gluex_polarized(path: &str) -> Dataset<GlueXPolarizedEvent> {
+    let file = File::open(path).expect("Open Error");
+    let dataframe = ParquetReader::new(file).finish().expect("Read Error");
+    let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
+    let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
+    let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
+    let e_finalstate = extract_vector("E_FinalState", &dataframe, ReadType::F32);
+    let px_finalstate = extract_vector("Px_FinalState", &dataframe, ReadType::F32);
+    let py_finalstate = extract_vector("Py_FinalState", &dataframe, ReadType::F32);
+    let pz_finalstate = extract_vector("Pz_FinalState", &dataframe, ReadType::F32);
+    let zero_vec = vec![0.0; e_beam.len()];
+    let beam_four_momentum =
+        scalars_to_momentum(e_beam.clone(), zero_vec.clone(), zero_vec, e_beam);
+    let eps_array: Vec<Vector3<f64>> = px_beam
+        .into_par_iter()
+        .zip(py_beam.into_par_iter())
+        .map(|(px, py)| Vector3::new(px, py, 0.0))
+        .collect();
+    let final_state_four_momentum =
+        vectors_to_momenta(e_finalstate, px_finalstate, py_finalstate, pz_finalstate);
+    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
+    let mut dataset = Dataset::new();
+    dataset.events = (
+        beam_four_momentum,
+        final_state_four_momentum,
+        weight,
+        eps_array,
+    )
+        .into_par_iter()
+        .map(|(beam_p4, fs, weight, eps)| GlueXPolarizedEvent {
+            weight,
+            beam_p4,
+            recoil_p4: fs[0],
+            daughter_p4s: fs[1..].to_vec(),
+            eps,
+        })
+        .collect();
+    dataset
 }
 
 #[derive(Clone, Copy)]
@@ -107,76 +243,23 @@ impl Display for Wave {
     }
 }
 
-#[derive(Clone)]
-pub struct Ylm {
-    pub wave: Wave,
-    ylm: HashMap<Uuid, Vec<Complex64>>,
-}
-
-impl Display for Ylm {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Ylm {}", self.wave)
-    }
-}
-
-impl Ylm {
-    pub fn new(wave: Wave) -> Self {
-        Ylm {
-            wave,
-            ylm: HashMap::default(),
-        }
-    }
-    fn calculate_ylm(&mut self, dataset: &Dataset) -> Vec<Complex64> {
-        let beam_p4 = dataset.vector("Beam P4").unwrap();
-        let recoil_p4 = dataset.vector("Recoil P4").unwrap();
-        let decay1_p4 = dataset.vector("Decay1 P4").unwrap();
-        let decay2_p4 = dataset.vector("Decay2 P4").unwrap();
-
-        (beam_p4, recoil_p4, decay1_p4, decay2_p4)
-            .into_par_iter()
-            .map(|(beam_arr, recoil_arr, decay1_arr, decay2_arr)| {
-                let beam_lab = FourMomentum::from(beam_arr);
-                let proton_lab = FourMomentum::from(recoil_arr);
-                let decay1_lab = FourMomentum::from(decay1_arr);
-                let decay2_lab = FourMomentum::from(decay2_arr);
-                let final_state_lab = decay1_lab + decay2_lab + proton_lab;
-                let resonance_lab = decay1_lab + decay2_lab;
-
-                let beam = beam_lab.boost_along(&final_state_lab);
-                let recoil = proton_lab.boost_along(&final_state_lab);
-                let resonance = resonance_lab.boost_along(&final_state_lab);
-                let decay1 = decay1_lab.boost_along(&final_state_lab);
-
-                let recoil_res = recoil.boost_along(&resonance);
-                let decay1_res = decay1.boost_along(&resonance);
-
-                let z = -1.0 * recoil_res.momentum().normalize();
-                let y = beam.momentum().cross(&(-1.0 * recoil.momentum()));
-                let x = y.cross(&z);
-                let decay1_p3 = decay1_res.momentum();
-
-                let p =
-                    Coordinates::cartesian(decay1_p3.dot(&x), decay1_p3.dot(&y), decay1_p3.dot(&z));
-                ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p)
-            })
-            .collect()
-    }
-}
-
-impl Amplitude for Ylm {
-    fn evaluate(
-        &mut self,
-        dataset: &Dataset,
-        _parameters: &HashMap<String, f64>,
-    ) -> Vec<Complex64> {
-        if let Some(res) = self.ylm.get(&dataset.get_uuid()) {
-            res.to_vec()
-        } else {
-            let res = self.calculate_ylm(dataset);
-            self.ylm.insert(dataset.get_uuid(), res);
-            self.ylm.get(&dataset.get_uuid()).unwrap().to_vec()
-        }
-    }
+pub fn ylm<T>(event: &T, wave: Wave) -> Complex64
+where
+    T: Event + BeamP4 + RecoilP4 + DaughterP4s,
+{
+    let resonance = event.daughter_p4s()[0] + event.daughter_p4s()[1];
+    let p1 = event.daughter_p4s()[0];
+    let recoil_res = event.recoil_p4().boost_along(&resonance);
+    let p1_res = p1.boost_along(&resonance);
+    let z = -1.0 * recoil_res.momentum().normalize();
+    let y = event
+        .beam_p4()
+        .momentum()
+        .cross(&(-1.0 * event.recoil_p4().momentum()));
+    let x = y.cross(&z);
+    let p1_vec = p1_res.momentum();
+    let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+    ComplexSH::Spherical.eval(wave.l(), wave.m(), &p)
 }
 
 pub enum Reflectivity {
@@ -184,315 +267,292 @@ pub enum Reflectivity {
     Negative,
 }
 
-pub enum Part {
-    Real,
-    Imag,
-}
-
-pub struct Zlm {
-    pub wave: Wave,
-    pub reflectivity: Reflectivity,
-    pub part: Part,
-    zlm: HashMap<Uuid, Vec<Complex64>>,
-}
-
-impl Display for Zlm {
+impl Display for Reflectivity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let part = match self.part {
-            Part::Real => "Re",
-            Part::Imag => "Im",
-        };
-        let refl = match self.reflectivity {
-            Reflectivity::Positive => "+",
-            Reflectivity::Negative => "-",
-        };
-        write!(f, "{}[Zlm {} ({})]", part, self.wave, refl)
-    }
-}
-
-impl Zlm {
-    pub fn new(wave: Wave, reflectivity: Reflectivity, part: Part) -> Self {
-        Zlm {
-            wave,
-            reflectivity,
-            part,
-            zlm: HashMap::default(),
-        }
-    }
-    fn calculate_zlm(&mut self, dataset: &Dataset) -> Vec<Complex64> {
-        let beam_p4 = dataset.vector("Beam P4").unwrap();
-        let recoil_p4 = dataset.vector("Recoil P4").unwrap();
-        let decay1_p4 = dataset.vector("Decay1 P4").unwrap();
-        let decay2_p4 = dataset.vector("Decay2 P4").unwrap();
-        let eps_vec = dataset.vector("EPS").unwrap();
-
-        let sign = match self.reflectivity {
-            Reflectivity::Positive => 1.0,
-            Reflectivity::Negative => -1.0,
-        } * match self.part {
-            Part::Real => 1.0,
-            Part::Imag => -1.0,
-        };
-        (beam_p4, recoil_p4, decay1_p4, decay2_p4, eps_vec)
-            .into_par_iter()
-            .map(|(beam_arr, recoil_arr, decay1_arr, decay2_arr, eps_arr)| {
-                let beam_lab = FourMomentum::from(beam_arr);
-                let proton_lab = FourMomentum::from(recoil_arr);
-                let decay1_lab = FourMomentum::from(decay1_arr);
-                let decay2_lab = FourMomentum::from(decay2_arr);
-                let final_state_lab = decay1_lab + decay2_lab + proton_lab;
-                let resonance_lab = decay1_lab + decay2_lab;
-
-                let beam = beam_lab.boost_along(&final_state_lab);
-                let recoil = proton_lab.boost_along(&final_state_lab);
-                let resonance = resonance_lab.boost_along(&final_state_lab);
-                let decay1 = decay1_lab.boost_along(&final_state_lab);
-
-                let recoil_res = recoil.boost_along(&resonance);
-                let decay1_res = decay1.boost_along(&resonance);
-
-                let z = -1.0 * recoil_res.momentum().normalize();
-                let y = beam.momentum().cross(&(-1.0 * recoil.momentum()));
-                let x = y.cross(&z);
-                let decay1_p3 = decay1_res.momentum();
-
-                let p =
-                    Coordinates::cartesian(decay1_p3.dot(&x), decay1_p3.dot(&y), decay1_p3.dot(&z));
-                let ylm = ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p);
-                let eps = Vector3::from_vec(eps_arr.to_vec());
-                let big_phi = y
-                    .dot(&eps)
-                    .atan2(beam.momentum().normalize().dot(&eps.cross(&y)));
-                let pgamma = eps.norm();
-
-                let phase = Complex64::cis(-big_phi);
-                let zlm = ylm * phase;
-                Complex64::new((1.0 + sign * pgamma).sqrt() * zlm.re, 0.0)
-            })
-            .collect()
-    }
-}
-impl Amplitude for Zlm {
-    fn evaluate(
-        &mut self,
-        dataset: &Dataset,
-        _parameters: &HashMap<String, f64>,
-    ) -> Vec<Complex64> {
-        if let Some(res) = self.zlm.get(&dataset.get_uuid()) {
-            res.to_vec()
-        } else {
-            let res = self.calculate_zlm(dataset);
-            self.zlm.insert(dataset.get_uuid(), res);
-            self.zlm.get(&dataset.get_uuid()).unwrap().to_vec()
+        match self {
+            Reflectivity::Positive => write!(f, "+"),
+            Reflectivity::Negative => write!(f, "-"),
         }
     }
 }
 
-#[derive(Clone)]
-pub struct KMatrixConstants {
-    pub g: Array2<f64>,
-    pub m: Array1<f64>,
-    pub c: Array2<f64>,
-    pub m1: Array1<f64>,
-    pub m2: Array1<f64>,
-    pub n_resonances: usize,
-    pub n_channels: usize,
-    pub wave: Wave,
+pub fn zlm<T>(event: &T, wave: Wave, reflectivity: Reflectivity) -> Complex64
+where
+    T: Event + BeamP4 + RecoilP4 + DaughterP4s + Polarized,
+{
+    let resonance = event.daughter_p4s()[0] + event.daughter_p4s()[1];
+    let p1 = event.daughter_p4s()[0];
+    let recoil_res = event.recoil_p4().boost_along(&resonance);
+    let p1_res = p1.boost_along(&resonance);
+    let z = -1.0 * recoil_res.momentum().normalize();
+    let y = event
+        .beam_p4()
+        .momentum()
+        .cross(&(-1.0 * event.recoil_p4().momentum()));
+    let x = y.cross(&z);
+    let p1_vec = p1_res.momentum();
+    let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+    let ylm = ComplexSH::Spherical.eval(wave.l(), wave.m(), &p);
+    let big_phi = y.dot(event.eps()).atan2(
+        event
+            .beam_p4()
+            .momentum()
+            .normalize()
+            .dot(&event.eps().cross(&y)),
+    );
+    let pgamma = event.eps().norm();
+
+    let phase = Complex64::cis(-big_phi);
+    let zlm = ylm * phase;
+    match reflectivity {
+        Reflectivity::Positive => Complex64::new(
+            (1.0 + pgamma).sqrt() * zlm.re,
+            (1.0 - pgamma).sqrt() * zlm.im,
+        ),
+        Reflectivity::Negative => Complex64::new(
+            (1.0 - pgamma).sqrt() * zlm.re,
+            (1.0 + pgamma).sqrt() * zlm.im,
+        ),
+    }
 }
 
-impl KMatrixConstants {
-    fn chi_plus(&self, s: f64, channel: usize) -> Complex64 {
-        (1.0 - ((&self.m1 + &self.m2) * (&self.m1 + &self.m2))[channel] / s).into()
-    }
+struct KMatrixConstants<const C: usize, const R: usize> {
+    g: SMatrix<f64, C, R>,
+    c: SMatrix<f64, C, C>,
+    m1s: [f64; C],
+    m2s: [f64; C],
+    mrs: [f64; R],
+    adler_zero: Option<AdlerZero>,
+    l: usize,
+}
 
-    fn chi_minus(&self, s: f64, channel: usize) -> Complex64 {
-        (1.0 - ((&self.m1 - &self.m2) * (&self.m1 - &self.m2))[channel] / s).into()
-    }
+fn chi_plus(s: f64, m1: f64, m2: f64) -> Complex64 {
+    (1.0 - ((m1 + m2) * (m1 + m2)) / s).into()
+}
 
-    fn rho(&self, s: f64, channel: usize) -> Complex64 {
-        (self.chi_plus(s, channel) * self.chi_minus(s, channel)).sqrt()
-    }
-    fn c_matrix(&self, s: f64) -> Array2<Complex64> {
-        Array2::from_diag(&Array1::from_shape_fn(self.n_channels, |channel| {
-            self.rho(s, channel) / PI
-                * ((self.chi_plus(s, channel) + self.rho(s, channel))
-                    / (self.chi_plus(s, channel) - self.rho(s, channel)))
-                .ln()
-                + self.chi_plus(s, channel) / PI
-                    * ((&self.m2 - &self.m1) / (&self.m1 + &self.m2))[channel]
-                    * Complex64::from((&self.m2 / &self.m1)[channel]).ln()
-        }))
-    }
-    fn z(&self, s: f64, channel: usize) -> Complex64 {
-        let q = self.rho(s, channel) * Complex64::sqrt(s.into()) / 2.0;
-        q * q / (0.1973 * 0.1973)
-    }
-    fn blatt_weisskopf(&self, s: f64, channel: usize) -> Complex64 {
-        let z = self.z(s, channel);
-        match self.wave.l() {
-            0 => 1.0.into(),
-            1 => ((2.0 * z) / (z + 1.0)).sqrt(),
-            2 => ((13.0 * z.powi(2)) / ((z - 3.0).powi(2) + 9.0 * z)).sqrt(),
-            3 => ((277.0 * z.powi(3)) / (z * (z - 15.0).powi(2) + 9.0 * (2.0 * z - 5.0).powi(2)))
-                .sqrt(),
-            4 => ((12746.0 * z.powi(4)) / (z.powi(2) - 45.0 * z + 105.0).powi(2)
-                + 25.0 * z * (2.0 * z - 21.0).powi(2))
-            .sqrt(),
-            l => panic!("L = {l} is not yet implemented"),
+fn chi_minus(s: f64, m1: f64, m2: f64) -> Complex64 {
+    (1.0 - ((m1 - m2) * (m1 - m2)) / s).into()
+}
+
+fn rho(s: f64, m1: f64, m2: f64) -> Complex64 {
+    (chi_plus(s, m1, m2) * chi_minus(s, m1, m2)).sqrt()
+}
+fn c_matrix<const C: usize, const R: usize>(
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+) -> SMatrix<Complex64, C, C> {
+    SMatrix::from_diagonal(&SVector::from_fn(|i, _| {
+        rho(s, constants.m1s[i], constants.m2s[i]) / PI
+            * ((chi_plus(s, constants.m1s[i], constants.m2s[i])
+                + rho(s, constants.m1s[i], constants.m2s[i]))
+                / (chi_plus(s, constants.m1s[i], constants.m2s[i])
+                    - rho(s, constants.m1s[i], constants.m2s[i])))
+            .ln()
+            + chi_plus(s, constants.m1s[i], constants.m2s[i]) / PI
+                * ((constants.m2s[i] - constants.m1s[i]) / (constants.m1s[i] + constants.m2s[i]))
+                * (constants.m2s[i] / constants.m1s[i]).ln()
+    }))
+}
+fn z(s: f64, m1: f64, m2: f64) -> Complex64 {
+    let q = rho(s, m1, m2) * s.sqrt() / 2.0;
+    q * q / (0.1973 * 0.1973)
+}
+fn blatt_weisskopf(s: f64, m1: f64, m2: f64, l: usize) -> Complex64 {
+    let z = z(s, m1, m2);
+    match l {
+        0 => 1.0.into(),
+        1 => ((2.0 * z) / (z + 1.0)).sqrt(),
+        2 => ((13.0 * z.powi(2)) / ((z - 3.0).powi(2) + 9.0 * z)).sqrt(),
+        3 => {
+            ((277.0 * z.powi(3)) / (z * (z - 15.0).powi(2) + 9.0 * (2.0 * z - 5.0).powi(2))).sqrt()
         }
-    }
-    fn barrier_factor(&self, s: f64, channel: usize, resonance: usize) -> Complex64 {
-        let numerator = self.blatt_weisskopf(s, channel);
-        let denominator = self.blatt_weisskopf(self.m[resonance].powi(2), channel);
-        numerator / denominator
+        4 => ((12746.0 * z.powi(4)) / (z.powi(2) - 45.0 * z + 105.0).powi(2)
+            + 25.0 * z * (2.0 * z - 21.0).powi(2))
+        .sqrt(),
+        l => panic!("L = {l} is not yet implemented"),
     }
 }
-
-#[derive(Clone)]
+fn barrier_factor(s: f64, m1: f64, m2: f64, mr: f64, l: usize) -> Complex64 {
+    blatt_weisskopf(s, m1, m2, l) / blatt_weisskopf(mr.powi(2), m1, m2, l)
+}
+fn barrier_matrix<const C: usize, const R: usize>(
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+) -> SMatrix<Complex64, C, R> {
+    SMatrix::from_fn(|i, a| {
+        barrier_factor(
+            s,
+            constants.m1s[i],
+            constants.m2s[i],
+            constants.mrs[a],
+            constants.l,
+        )
+    })
+}
+#[derive(Clone, Copy)]
 pub struct AdlerZero {
     pub s_0: f64,
     pub s_norm: f64,
 }
-
-pub struct FrozenKMatrix {
-    selected_channel: usize,
-    constants: KMatrixConstants,
-    barrier_factor: HashMap<Uuid, Vec<CMatrix64>>,
-    ikc_vector: HashMap<Uuid, Vec<CVector64>>,
-    adler_zero: Option<AdlerZero>,
-}
-
-impl Display for FrozenKMatrix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Kmatrix placeholder")
-    }
-}
-
-impl FrozenKMatrix {
-    pub fn new(
-        selected_channel: usize,
-        constants: &KMatrixConstants,
-        adler_zero: Option<&AdlerZero>,
-    ) -> Self {
-        FrozenKMatrix {
-            selected_channel,
-            constants: constants.clone(),
-            barrier_factor: HashMap::default(),
-            ikc_vector: HashMap::default(),
-            adler_zero: adler_zero.cloned(),
-        }
-    }
-    fn calculate_barrier_factor(&self, dataset: &Dataset) -> Vec<CMatrix64> {
-        let decay1_p4 = dataset.vector("Decay1 P4").unwrap();
-        let decay2_p4 = dataset.vector("Decay2 P4").unwrap();
-        (decay1_p4, decay2_p4)
+fn k_matrix<const C: usize, const R: usize>(
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+) -> SMatrix<Complex64, C, C> {
+    let bf = barrier_matrix(s, constants);
+    SMatrix::from_fn(|i, j| {
+        (0..R)
             .into_par_iter()
-            .map(|(decay1_arr, decay2_arr)| {
-                let decay1_lab = FourMomentum::from(decay1_arr);
-                let decay2_lab = FourMomentum::from(decay2_arr);
-                let s = (decay1_lab + decay2_lab).m2();
-                Array2::from_shape_fn(
-                    (self.constants.n_channels, self.constants.n_resonances),
-                    |(i, a)| self.constants.barrier_factor(s, i, a),
-                )
+            .map(|a| {
+                bf[(i, a)]
+                    * bf[(j, a)]
+                    * (constants.g[(i, a)] * constants.g[(j, a)] / (constants.mrs[a].powi(2) - s)
+                        + constants.c[(i, j)])
             })
-            .collect()
-    }
-    fn calculate_k_matrix(
-        &mut self,
-        dataset: &Dataset,
-        barrier_factor: &Vec<CMatrix64>,
-    ) -> Vec<CVector64> {
-        let decay1_p4 = dataset.vector("Decay1 P4").unwrap();
-        let decay2_p4 = dataset.vector("Decay2 P4").unwrap();
-        (decay1_p4, decay2_p4, barrier_factor)
+            .sum::<Complex64>()
+            * constants
+                .adler_zero
+                .map_or(1.0, |az| (s - az.s_0) / az.s_norm)
+    })
+}
+fn ikc_inv<const C: usize, const R: usize>(
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+    channel: usize,
+) -> SVector<Complex64, C> {
+    let c_mat = c_matrix(s, constants);
+    let i_mat = SMatrix::<Complex64, C, C>::identity();
+    let k_mat = k_matrix(s, constants);
+    let ikc_mat = i_mat + k_mat * c_mat;
+    let ikc_inv_mat = ikc_mat.try_inverse().unwrap();
+    ikc_inv_mat.row(channel).transpose()
+}
+fn p_vector<const C: usize, const R: usize>(
+    betas: &SVector<Complex64, C>,
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+    barrier_factor: &SMatrix<Complex64, C, R>,
+) -> SVector<Complex64, C> {
+    SVector::<Complex64, C>::from_fn(|j, _| {
+        (0..R)
             .into_par_iter()
-            .map(|(decay1_arr, decay2_arr, bf)| {
-                let decay1_lab = FourMomentum::from(decay1_arr);
-                let decay2_lab = FourMomentum::from(decay2_arr);
-                let s = (decay1_lab + decay2_lab).m2();
-                let k_ija = Array3::from_shape_fn(
-                    (
-                        self.constants.n_channels,
-                        self.constants.n_channels,
-                        self.constants.n_resonances,
-                    ),
-                    |(i, j, a)| {
-                        bf[[i, a]]
-                            * ((self.constants.g[[i, a]] * self.constants.g[[j, a]])
-                                / (self.constants.m[a].powi(2) - s)
-                                + self.constants.c[[i, j]])
-                            * bf[[j, a]]
-                    },
-                );
-                let k_mat = match self.adler_zero {
-                    Some(AdlerZero { s_0, s_norm }) => {
-                        Complex64::from((s - s_0) / s_norm) * k_ija.sum_axis(Axis(2))
-                    }
-                    None => k_ija.sum_axis(Axis(2)),
-                };
-                let c_mat = self.constants.c_matrix(s);
-                let i_mat: Array2<Complex64> = Array2::eye(self.constants.n_channels);
-                let ikc_mat = i_mat + k_mat * c_mat;
-                let ikc_mat_inv = ikc_mat.inv().unwrap();
-                ikc_mat_inv.row(self.selected_channel).to_owned()
+            .map(|a| {
+                betas[a] * constants.g[(j, a)] / (constants.mrs[a].powi(2) - s)
+                    * barrier_factor[(j, a)]
             })
-            .collect()
-    }
+            .sum()
+    })
+}
+fn calculate_k_matrix<const C: usize, const R: usize>(
+    betas: &SVector<Complex64, C>,
+    s: f64,
+    constants: &KMatrixConstants<C, R>,
+    barrier_factor: &SMatrix<Complex64, C, R>,
+    ikc_inv_vec: &SVector<Complex64, C>,
+) -> Complex64 {
+    ikc_inv_vec.dot(&p_vector(betas, s, constants, barrier_factor))
 }
 
-impl Amplitude for FrozenKMatrix {
-    fn parameter_names(&self) -> Option<Vec<String>> {
-        Some(
-            (0..self.constants.n_resonances)
-                .flat_map(|i| vec![format!("Resonance {i} re"), format!("Resonance {i} im")])
-                .collect(),
-        )
-    }
-    fn evaluate(&mut self, dataset: &Dataset, parameters: &HashMap<String, f64>) -> Vec<Complex64> {
-        let barrier_factor = if let Some(bf) = self.barrier_factor.get(&dataset.get_uuid()) {
-            bf.to_vec()
-        } else {
-            let res = self.calculate_barrier_factor(dataset);
-            self.barrier_factor.insert(dataset.get_uuid(), res);
-            self.barrier_factor
-                .get(&dataset.get_uuid())
-                .unwrap()
-                .to_vec()
-        };
-        let ikc_vector = if let Some(ikc_vec) = self.ikc_vector.get(&dataset.get_uuid()) {
-            ikc_vec.to_vec()
-        } else {
-            let res = self.calculate_k_matrix(dataset, &barrier_factor);
-            self.ikc_vector.insert(dataset.get_uuid(), res);
-            self.ikc_vector.get(&dataset.get_uuid()).unwrap().to_vec()
-        };
-        let betas = Array1::from_shape_fn(self.constants.n_resonances, |i| {
-            Complex64::new(
-                *parameters.get(&format!("Resonance {i} re")).unwrap(),
-                *parameters.get(&format!("Resonance {i} im")).unwrap(),
-            )
-        });
+#[rustfmt::skip]
+const F0: KMatrixConstants<5, 5> = KMatrixConstants {
+    g: SMatrix::<f64, 5, 5>::new(
+        0.74987, -0.01257, 0.02736, -0.15102, 0.36103,
+        0.06401, 0.00204, 0.77413, 0.50999, 0.13112,
+        -0.23417, -0.01032, 0.72283, 0.11934, 0.36792,
+        0.0157, 0.267, 0.09214, 0.02742, -0.04025,
+        -0.14242, 0.2278, 0.15981, 0.16272, -0.17397,
+    ),
+    c: SMatrix::<f64, 5, 5>::new(
+        0.03728, 0.00000, -0.01398, -0.02203, 0.01397,
+        0.00000, 0.00000, 0.00000, 0.00000, 0.00000,
+        -0.01398, 0.00000, 0.02349, 0.03101, -0.04003,
+        -0.02203, 0.00000, 0.03101, -0.13769, -0.06722,
+        0.01397, 0.00000, -0.04003, -0.06722, -0.28401,
+    ),
+    m1s: [0.13498, 0.26995, 0.49368, 0.54786, 0.54786],
+    m2s: [0.13498, 0.26995, 0.49761, 0.54786, 0.95778],
+    mrs: [0.51461, 0.90630, 1.23089, 1.46104, 1.69611],
+    adler_zero: Some(AdlerZero {
+        s_0: 0.0091125,
+        s_norm: 1.0,
+    }),
+    l: 0,
+};
 
-        let decay1_p4 = dataset.vector("Decay1 P4").unwrap();
-        let decay2_p4 = dataset.vector("Decay2 P4").unwrap();
-        (decay1_p4, decay2_p4, ikc_vector, barrier_factor)
-            .into_par_iter()
-            .map(|(decay1_arr, decay2_arr, ikc, bf)| {
-                let decay1_lab = FourMomentum::from(decay1_arr);
-                let decay2_lab = FourMomentum::from(decay2_arr);
-                let s = (decay1_lab + decay2_lab).m2();
-
-                let p_ja = Array2::from_shape_fn(
-                    (self.constants.n_channels, self.constants.n_resonances),
-                    |(j, a)| {
-                        ((betas[a] * self.constants.g[[j, a]]) / (self.constants.m[a].powi(2) - s))
-                            * bf[[j, a]]
-                    },
-                );
-                let p_vec = p_ja.sum_axis(Axis(1));
-                ikc.dot(&p_vec)
-            })
-            .collect()
-    }
+pub fn precalculate_k_matrix_f0<T>(
+    event: &T,
+    channel: usize,
+) -> (SMatrix<Complex64, 5, 5>, SVector<Complex64, 5>)
+where
+    T: Event + DaughterP4s,
+{
+    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+    (barrier_matrix(s, &F0), ikc_inv(s, &F0, channel))
 }
+
+pub fn calculate_k_matrix_f0<T>(
+    event: &T,
+    betas: &SVector<Complex64, 5>,
+    barrier_factor: &SMatrix<Complex64, 5, 5>,
+    ikc_inv_vec: &SVector<Complex64, 5>,
+) -> Complex64
+where
+    T: Event + DaughterP4s,
+{
+    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+    calculate_k_matrix(betas, s, &F0, barrier_factor, ikc_inv_vec)
+}
+
+#[rustfmt::skip]
+const F2: KMatrixConstants<4, 4> = KMatrixConstants {
+    g: SMatrix::<f64, 4, 4>::new(
+        0.40033, 0.15479, -0.089, -0.00113,
+        0.0182, 0.173, 0.32393, 0.15256,
+        -0.06709, 0.22941, -0.43133, 0.23721,
+        -0.49924, 0.19295, 0.27975, -0.03987,
+    ),
+    c: SMatrix::<f64, 4, 4>::new(
+        -0.04319, 0.00000, 0.00984, 0.01028,
+        0.00000, 0.00000, 0.00000, 0.00000,
+        0.00984, 0.00000, -0.07344, 0.05533,
+        0.01028, 0.00000, 0.05533, -0.05183,
+    ),
+    m1s: [0.13498, 0.26995, 0.49368, 0.54786],
+    m2s: [0.13498, 0.26995, 0.49761, 0.54786],
+    mrs: [1.15299, 1.48359, 1.72923, 1.96700],
+    adler_zero: None,
+    l: 2,
+};
+
+#[rustfmt::skip]
+const A0: KMatrixConstants<2, 2> = KMatrixConstants {
+    g: SMatrix::<f64, 2, 2>::new(
+        0.43215, -0.28825,
+        0.19, 0.43372
+    ),
+    c: SMatrix::<f64, 2, 2>::new(
+        0.00000, 0.00000, 
+        0.00000, 0.00000
+    ),
+    m1s: [0.13498, 0.49368],
+    m2s: [0.54786, 0.49761],
+    mrs: [0.95395, 1.26767],
+    adler_zero: None,
+    l: 0,
+};
+
+#[rustfmt::skip]
+const A2: KMatrixConstants<3, 2> = KMatrixConstants {
+    g: SMatrix::<f64, 3, 2>::new(
+        0.30073, 0.21426, -0.09162,
+        0.68567, 0.12543, 0.00184),
+    c: SMatrix::<f64, 3, 3>::new(
+        -0.40184, 0.00033, -0.08707,
+        0.00033, -0.21416, -0.06193,
+        -0.08707, -0.06193, -0.17435,
+    ),
+    m1s: [0.13498, 0.49368, 0.13498],
+    m2s: [0.54786, 0.49761, 0.95778],
+    mrs: [1.30080, 1.75351],
+    adler_zero: None,
+    l: 2,
+};
