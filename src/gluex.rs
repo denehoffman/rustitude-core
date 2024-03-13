@@ -326,16 +326,16 @@ struct KMatrixConstants<const C: usize, const R: usize> {
     l: usize,
 }
 
-fn chi_plus(s: f64, m1: f64, m2: f64) -> Complex64 {
-    (1.0 - ((m1 + m2) * (m1 + m2)) / s).into()
+fn chi_plus(s: f64, m1: f64, m2: f64) -> f64 {
+    1.0 - ((m1 + m2) * (m1 + m2)) / s
 }
 
-fn chi_minus(s: f64, m1: f64, m2: f64) -> Complex64 {
-    (1.0 - ((m1 - m2) * (m1 - m2)) / s).into()
+fn chi_minus(s: f64, m1: f64, m2: f64) -> f64 {
+    1.0 - ((m1 - m2) * (m1 - m2)) / s
 }
 
 fn rho(s: f64, m1: f64, m2: f64) -> Complex64 {
-    (chi_plus(s, m1, m2) * chi_minus(s, m1, m2)).sqrt()
+    Complex64::from(chi_plus(s, m1, m2) * chi_minus(s, m1, m2)).sqrt()
 }
 fn c_matrix<const C: usize, const R: usize>(
     s: f64,
@@ -401,7 +401,7 @@ fn k_matrix<const C: usize, const R: usize>(
     let bf = barrier_matrix(s, constants);
     SMatrix::from_fn(|i, j| {
         (0..R)
-            .into_par_iter()
+            .into_iter()
             .map(|a| {
                 bf[(i, a)]
                     * bf[(j, a)]
@@ -434,7 +434,7 @@ fn p_vector<const C: usize, const R: usize>(
 ) -> SVector<Complex64, C> {
     SVector::<Complex64, C>::from_fn(|j, _| {
         (0..R)
-            .into_par_iter()
+            .into_iter()
             .map(|a| {
                 betas[a] * constants.g[(j, a)] / (constants.mrs[a].powi(2) - s)
                     * barrier_factor[(j, a)]
@@ -442,6 +442,7 @@ fn p_vector<const C: usize, const R: usize>(
             .sum()
     })
 }
+
 fn calculate_k_matrix<const C: usize, const R: usize>(
     betas: &SVector<Complex64, C>,
     s: f64,

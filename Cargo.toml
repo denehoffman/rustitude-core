@@ -37,13 +37,24 @@ variantly = "0.4.0"
 anyinput = "0.1.6"
 uuid = { version = "1.7.0", features = ["v4"] }
 
+[features]
+simd = []
+
 [profile.release]
-lto = true
-codegen-units = 1
+# lto = true
+# codegen-units = 1
 panic = "abort"
 debug = true
 # debug = false
 # strip = true
+
+[[bench]]
+name = "simd_benchmark"
+harness = false
+
+
+[dev-dependencies]
+criterion = "0.5.1"
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]

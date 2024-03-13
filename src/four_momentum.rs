@@ -4,17 +4,29 @@ use std::{
     ops::{Add, Sub},
 };
 
+#[cfg(feature = "simd")]
+use std::simd::prelude::*;
+
+#[cfg(not(feature = "simd"))]
 #[derive(Debug, Clone, PartialEq, Copy)]
-pub struct FourMomentum {
-    pub e: f64,
-    pub px: f64,
-    pub py: f64,
-    pub pz: f64,
-}
+pub struct FourMomentum([f64; 4]);
+
+#[cfg(feature = "simd")]
+#[derive(Debug, Clone, PartialEq, Copy)]
+pub struct FourMomentum(f64x4);
+
+impl Eq for FourMomentum {}
 
 impl Display for FourMomentum {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}, ({}, {}, {})]", self.e, self.px, self.py, self.pz)
+        write!(
+            f,
+            "[{}, ({}, {}, {})]",
+            self.e(),
+            self.px(),
+            self.py(),
+            self.pz()
+        )
     }
 }
 
@@ -37,7 +49,20 @@ impl FourMomentum {
         //! Create a new [`FourMomentum`] from energy and momentum components.
         //!
         //! Components are listed in the order $` (E, p_x, p_y, p_z) `$
-        Self { e, px, py, pz }
+        Self([e, px, py, pz].into())
+    }
+
+    pub fn e(&self) -> f64 {
+        self.0[0]
+    }
+    pub fn px(&self) -> f64 {
+        self.0[1]
+    }
+    pub fn py(&self) -> f64 {
+        self.0[2]
+    }
+    pub fn pz(&self) -> f64 {
+        self.0[3]
     }
 
     pub fn momentum(&self) -> Vector3<f64> {
@@ -51,7 +76,7 @@ impl FourMomentum {
         //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
         //! assert_eq!(vec_a.momentum(), Vector3::new(1.0, 0.2, -0.1));
         //! ```
-        Vector3::new(self.px, self.py, self.pz)
+        Vector3::new(self.px(), self.py(), self.pz())
     }
 
     pub fn m2(&self) -> f64 {
@@ -67,7 +92,7 @@ impl FourMomentum {
         //! //assert_eq!(vec_a.m2(), 20.0 * 20.0 - (1.0 * 1.0 + 0.0 * 0.2 + (-0.1) * (-0.1)));
         //!
         //! ```
-        self.e.powi(2) - self.px.powi(2) - self.py.powi(2) - self.pz.powi(2)
+        self.e().powi(2) - self.px().powi(2) - self.py().powi(2) - self.pz().powi(2)
     }
 
     pub fn m(&self) -> f64 {
@@ -86,7 +111,7 @@ impl FourMomentum {
         //! Construct the 3-vector $\overrightarrow{\beta}$ where
         //!
         //! $` \overrightarrow{\beta} = \frac{\overrightarrow{p}}{E} `$
-        self.momentum() / self.e
+        self.momentum() / self.e()
     }
 
     pub fn boost_matrix(&self) -> Matrix4<f64> {
@@ -140,9 +165,9 @@ impl FourMomentum {
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, -3.2, 4.0);
         //! let vec_a_COM = vec_a.boost_along(&vec_a);
-        //! assert_abs_diff_eq!(vec_a_COM.px, 0.0, epsilon = 1e-15);
-        //! assert_abs_diff_eq!(vec_a_COM.py, 0.0, epsilon = 1e-15);
-        //! assert_abs_diff_eq!(vec_a_COM.pz, 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.px(), 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.py(), 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.pz(), 0.0, epsilon = 1e-15);
         //! ```
         let m_boost = other.boost_matrix();
         (m_boost * Vector4::<f64>::from(self)).into()
@@ -151,116 +176,138 @@ impl FourMomentum {
 
 impl From<FourMomentum> for Vector4<f64> {
     fn from(val: FourMomentum) -> Self {
-        Vector4::new(val.e, val.px, val.py, val.pz)
+        Vector4::new(val.e(), val.px(), val.py(), val.pz())
     }
 }
 
 impl From<&FourMomentum> for Vector4<f64> {
     fn from(val: &FourMomentum) -> Self {
-        Vector4::new(val.e, val.px, val.py, val.pz)
+        Vector4::new(val.e(), val.px(), val.py(), val.pz())
     }
 }
 
+#[cfg(not(feature = "simd"))]
 impl From<Vector4<f64>> for FourMomentum {
     fn from(value: Vector4<f64>) -> Self {
-        Self {
-            e: value[0],
-            px: value[1],
-            py: value[2],
-            pz: value[3],
-        }
+        Self([value[0], value[1], value[2], value[3]])
     }
 }
 
+#[cfg(feature = "simd")]
+impl From<Vector4<f64>> for FourMomentum {
+    fn from(value: Vector4<f64>) -> Self {
+        Self(Simd::from_array([value[0], value[1], value[2], value[3]]))
+    }
+}
+
+#[cfg(not(feature = "simd"))]
 impl From<&Vector4<f64>> for FourMomentum {
     fn from(value: &Vector4<f64>) -> Self {
-        Self {
-            e: value[0],
-            px: value[1],
-            py: value[2],
-            pz: value[3],
-        }
+        Self([value[0], value[1], value[2], value[3]])
     }
 }
 
+#[cfg(feature = "simd")]
+impl From<&Vector4<f64>> for FourMomentum {
+    fn from(value: &Vector4<f64>) -> Self {
+        Self(Simd::from_array([value[0], value[1], value[2], value[3]]))
+    }
+}
+
+#[cfg(not(feature = "simd"))]
 impl From<Vec<f64>> for FourMomentum {
     fn from(value: Vec<f64>) -> Self {
-        Self {
-            e: value[0],
-            px: value[1],
-            py: value[2],
-            pz: value[3],
-        }
+        Self([value[0], value[1], value[2], value[3]])
     }
 }
 
+#[cfg(feature = "simd")]
+impl From<Vec<f64>> for FourMomentum {
+    fn from(value: Vec<f64>) -> Self {
+        Self(Simd::from_array([value[0], value[1], value[2], value[3]]))
+    }
+}
+
+#[cfg(not(feature = "simd"))]
 impl From<&Vec<f64>> for FourMomentum {
     fn from(value: &Vec<f64>) -> Self {
-        Self {
-            e: value[0],
-            px: value[1],
-            py: value[2],
-            pz: value[3],
-        }
+        Self([value[0], value[1], value[2], value[3]])
     }
 }
 
+#[cfg(feature = "simd")]
+impl From<&Vec<f64>> for FourMomentum {
+    fn from(value: &Vec<f64>) -> Self {
+        Self(Simd::from_array([value[0], value[1], value[2], value[3]]))
+    }
+}
+
+#[cfg(feature = "simd")]
+impl From<FourMomentum> for f64x4 {
+    fn from(value: FourMomentum) -> Self {
+        value.0
+    }
+}
+
+#[cfg(not(feature = "simd"))]
 impl Add for FourMomentum {
     type Output = FourMomentum;
     fn add(self, rhs: Self) -> Self::Output {
-        Self {
-            e: self.e + rhs.e,
-            px: self.px + rhs.px,
-            py: self.py + rhs.py,
-            pz: self.pz + rhs.pz,
-        }
+        FourMomentum([
+            self.0[0] + rhs.0[0],
+            self.0[1] + rhs.0[1],
+            self.0[2] + rhs.0[2],
+            self.0[3] + rhs.0[3],
+        ])
     }
 }
 
-impl<'a, 'b> Add<&'b FourMomentum> for &'a FourMomentum {
+#[cfg(feature = "simd")]
+impl Add for FourMomentum {
     type Output = FourMomentum;
-    fn add(self, rhs: &'b FourMomentum) -> Self::Output {
-        FourMomentum {
-            e: self.e + rhs.e,
-            px: self.px + rhs.px,
-            py: self.py + rhs.py,
-            pz: self.pz + rhs.pz,
-        }
+    fn add(self, rhs: Self) -> Self::Output {
+        FourMomentum(self.0 + rhs.0)
     }
 }
 
+impl Add for &FourMomentum {
+    type Output = <FourMomentum as Add>::Output;
+    fn add(self, rhs: &FourMomentum) -> Self::Output {
+        FourMomentum::add(*self, *rhs)
+    }
+}
+
+#[cfg(not(feature = "simd"))]
 impl Sub for FourMomentum {
     type Output = FourMomentum;
     fn sub(self, rhs: Self) -> Self::Output {
-        Self {
-            e: self.e - rhs.e,
-            px: self.px - rhs.px,
-            py: self.py - rhs.py,
-            pz: self.pz - rhs.pz,
-        }
+        FourMomentum([
+            self.0[0] - rhs.0[0],
+            self.0[1] - rhs.0[1],
+            self.0[2] - rhs.0[2],
+            self.0[3] - rhs.0[3],
+        ])
     }
 }
 
-impl<'a, 'b> Sub<&'b FourMomentum> for &'a FourMomentum {
+#[cfg(feature = "simd")]
+impl Sub for FourMomentum {
     type Output = FourMomentum;
-    fn sub(self, rhs: &'b FourMomentum) -> Self::Output {
-        FourMomentum {
-            e: self.e - rhs.e,
-            px: self.px - rhs.px,
-            py: self.py - rhs.py,
-            pz: self.pz - rhs.pz,
-        }
+    fn sub(self, rhs: Self) -> Self::Output {
+        FourMomentum(self.0 - rhs.0)
+    }
+}
+
+impl Sub for &FourMomentum {
+    type Output = <FourMomentum as Sub>::Output;
+    fn sub(self, rhs: &FourMomentum) -> Self::Output {
+        FourMomentum::sub(*self, *rhs)
     }
 }
 
 impl Default for FourMomentum {
     fn default() -> Self {
-        Self {
-            e: 0.0,
-            px: 0.0,
-            py: 0.0,
-            pz: 0.0,
-        }
+        FourMomentum([0.0, 0.0, 0.0, 0.0].into())
     }
 }
 
