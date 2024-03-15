@@ -1,17 +1,16 @@
-use std::{f64::consts::PI, fmt::Display, fs::File};
+use std::{f64::consts::PI, fmt::Display, fs::File, path::Path};
 
 use crate::{
-    dataset::{
-        extract_scalar, extract_vector, scalars_to_momentum, vectors_to_momenta, Dataset, Event,
-        ReadType,
-    },
+    dataset::{Dataset, Event},
     prelude::FourMomentum,
 };
 
 use nalgebra::{ComplexField, SMatrix, SVector, Vector3};
 use num_complex::Complex64;
-use polars::prelude::*;
-use rayon::prelude::*;
+use parquet::{
+    file::reader::{FileReader, SerializedFileReader},
+    record::{Field, Row},
+};
 use sphrs::{ComplexSH, Coordinates, SHEval};
 
 pub trait Weight {
@@ -34,13 +33,26 @@ pub trait Polarized {
     fn eps(&self) -> &Vector3<f64>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GlueXEvent {
     weight: f64,
     beam_p4: FourMomentum,
     recoil_p4: FourMomentum,
     daughter_p4s: Vec<FourMomentum>,
 }
+impl GlueXEvent {
+    fn ensure_com_boost(&mut self) {
+        //! Boosts everything to the Center-Of-Mass frame (things already in the COM frame will be
+        //! unchanged by this transformation)
+        let final_state_p4 = self.recoil_p4 + self.daughter_p4s.iter().sum();
+        self.beam_p4 = self.beam_p4.boost_along(&final_state_p4);
+        self.recoil_p4 = self.recoil_p4.boost_along(&final_state_p4);
+        for dp4 in self.daughter_p4s.iter_mut() {
+            *dp4 = dp4.boost_along(&final_state_p4);
+        }
+    }
+}
+
 impl Event for GlueXEvent {}
 impl Weight for GlueXEvent {
     fn weight(&self) -> &f64 {
@@ -66,7 +78,7 @@ impl Display for GlueXEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Weight: {}", self.weight)?;
         writeln!(f, "Beam P4: {}", self.beam_p4)?;
-        writeln!(f, "Recoil P4: {}", self.beam_p4)?;
+        writeln!(f, "Recoil P4: {}", self.recoil_p4)?;
         writeln!(f, "Daughters:")?;
         for (i, p4) in self.daughter_p4s.iter().enumerate() {
             writeln!(f, "\t{i} -> {p4}")?;
@@ -74,14 +86,115 @@ impl Display for GlueXEvent {
         Ok(())
     }
 }
+impl From<Row> for GlueXEvent {
+    fn from(row: Row) -> Self {
+        let mut event = GlueXEvent::default();
+        let mut e_fs: Vec<f64> = Vec::new();
+        let mut px_fs: Vec<f64> = Vec::new();
+        let mut py_fs: Vec<f64> = Vec::new();
+        let mut pz_fs: Vec<f64> = Vec::new();
+        for (name, field) in row.get_column_iter() {
+            match (name.as_str(), field) {
+                ("E_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_e(f64::from(*value));
+                }
+                ("Px_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_px(f64::from(*value));
+                }
+                ("Py_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_py(f64::from(*value));
+                }
+                ("Pz_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_pz(f64::from(*value));
+                }
+                ("Weight", Field::Float(value)) => event.weight = f64::from(*value),
+                ("E_FinalState", Field::ListInternal(list)) => {
+                    e_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Px_FinalState", Field::ListInternal(list)) => {
+                    px_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Py_FinalState", Field::ListInternal(list)) => {
+                    py_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Pz_FinalState", Field::ListInternal(list)) => {
+                    pz_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                _ => {}
+            }
+        }
+        event.recoil_p4 = FourMomentum::new(e_fs[0], px_fs[0], py_fs[0], pz_fs[0]);
+        event.daughter_p4s = e_fs[1..]
+            .iter()
+            .zip(px_fs[1..].iter())
+            .zip(py_fs[1..].iter())
+            .zip(pz_fs[1..].iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
+            .collect();
+        event.ensure_com_boost();
+        event
+    }
+}
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct GlueXPolarizedEvent {
     weight: f64,
     beam_p4: FourMomentum,
     recoil_p4: FourMomentum,
     daughter_p4s: Vec<FourMomentum>,
     eps: Vector3<f64>,
+}
+impl GlueXPolarizedEvent {
+    fn ensure_com_boost(&mut self) {
+        //! Boosts everything to the Center-Of-Mass frame (things already in the COM frame will be
+        //! unchanged by this transformation)
+        let final_state_p4 = self.recoil_p4 + self.daughter_p4s.iter().sum();
+        self.beam_p4 = self.beam_p4.boost_along(&final_state_p4);
+        self.recoil_p4 = self.recoil_p4.boost_along(&final_state_p4);
+        for dp4 in self.daughter_p4s.iter_mut() {
+            *dp4 = dp4.boost_along(&final_state_p4);
+        }
+    }
 }
 impl Event for GlueXPolarizedEvent {}
 impl Weight for GlueXPolarizedEvent {
@@ -113,7 +226,7 @@ impl Display for GlueXPolarizedEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Weight: {}", self.weight)?;
         writeln!(f, "Beam P4: {}", self.beam_p4)?;
-        writeln!(f, "Recoil P4: {}", self.beam_p4)?;
+        writeln!(f, "Recoil P4: {}", self.recoil_p4)?;
         writeln!(f, "Daughters:")?;
         for (i, p4) in self.daughter_p4s.iter().enumerate() {
             writeln!(f, "\t{i} -> {p4}")?;
@@ -126,76 +239,115 @@ impl Display for GlueXPolarizedEvent {
         Ok(())
     }
 }
+impl From<Row> for GlueXPolarizedEvent {
+    fn from(row: Row) -> Self {
+        let mut event = GlueXPolarizedEvent::default();
+        let mut e_fs: Vec<f64> = Vec::new();
+        let mut px_fs: Vec<f64> = Vec::new();
+        let mut py_fs: Vec<f64> = Vec::new();
+        let mut pz_fs: Vec<f64> = Vec::new();
+        for (name, field) in row.get_column_iter() {
+            match (name.as_str(), field) {
+                ("E_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_e(f64::from(*value));
+                }
+                ("Px_Beam", Field::Float(value)) => event.eps[0] = f64::from(*value),
+                ("Py_Beam", Field::Float(value)) => event.eps[1] = f64::from(*value),
+                ("Pz_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_pz(f64::from(*value));
+                }
+                ("Weight", Field::Float(value)) => event.weight = f64::from(*value),
+                ("E_FinalState", Field::ListInternal(list)) => {
+                    e_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Px_FinalState", Field::ListInternal(list)) => {
+                    px_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Py_FinalState", Field::ListInternal(list)) => {
+                    py_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Pz_FinalState", Field::ListInternal(list)) => {
+                    pz_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                _ => {}
+            }
+        }
+        event.recoil_p4 = FourMomentum::new(e_fs[0], px_fs[0], py_fs[0], pz_fs[0]);
+        event.daughter_p4s = e_fs[1..]
+            .iter()
+            .zip(px_fs[1..].iter())
+            .zip(py_fs[1..].iter())
+            .zip(pz_fs[1..].iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
+            .collect();
+        event.ensure_com_boost();
+        event
+    }
+}
+
+pub fn open_gluex_parquet(path: &str) -> Dataset<GlueXEvent> {
+    let path = Path::new(path);
+    let file = File::open(path).unwrap();
+    let reader = SerializedFileReader::new(file).unwrap();
+    let row_iter = reader.get_row_iter(None).unwrap();
+    let mut dataset = Dataset::new();
+    dataset.events = row_iter.map(|row| GlueXEvent::from(row.unwrap())).collect();
+    dataset
+}
+pub fn open_gluex_pol_in_beam_parquet(path: &str) -> Dataset<GlueXPolarizedEvent> {
+    let path = Path::new(path);
+    let file = File::open(path).unwrap();
+    let reader = SerializedFileReader::new(file).unwrap();
+    let row_iter = reader.get_row_iter(None).unwrap();
+    let mut dataset = Dataset::new();
+    dataset.events = row_iter
+        .map(|row| GlueXPolarizedEvent::from(row.unwrap()))
+        .collect();
+    dataset
+}
 
 // NOTE TO SELF: for now we'll assume these are COM boosted, but we can add in a thing to do it
 // automatically later, maybe a COM boost function
-pub fn open_gluex(path: &str) -> Dataset<GlueXEvent> {
-    let file = File::open(path).expect("Open Error");
-    let dataframe = ParquetReader::new(file).finish().expect("Read Error");
-    let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
-    let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
-    let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
-    let pz_beam = extract_scalar("Pz_Beam", &dataframe, ReadType::F32);
-    let e_finalstate = extract_vector("E_FinalState", &dataframe, ReadType::F32);
-    let px_finalstate = extract_vector("Px_FinalState", &dataframe, ReadType::F32);
-    let py_finalstate = extract_vector("Py_FinalState", &dataframe, ReadType::F32);
-    let pz_finalstate = extract_vector("Pz_FinalState", &dataframe, ReadType::F32);
-    let beam_four_momentum = scalars_to_momentum(e_beam, px_beam, py_beam, pz_beam);
-    let final_state_four_momentum =
-        vectors_to_momenta(e_finalstate, px_finalstate, py_finalstate, pz_finalstate);
-    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
-    let mut dataset = Dataset::new();
-    dataset.events = (beam_four_momentum, final_state_four_momentum, weight)
-        .into_par_iter()
-        .map(|(beam_p4, fs, weight)| GlueXEvent {
-            weight,
-            beam_p4,
-            recoil_p4: fs[0],
-            daughter_p4s: fs[1..].to_vec(),
-        })
-        .collect();
-    dataset
-}
-
-pub fn open_gluex_polarized(path: &str) -> Dataset<GlueXPolarizedEvent> {
-    let file = File::open(path).expect("Open Error");
-    let dataframe = ParquetReader::new(file).finish().expect("Read Error");
-    let e_beam = extract_scalar("E_Beam", &dataframe, ReadType::F32);
-    let px_beam = extract_scalar("Px_Beam", &dataframe, ReadType::F32);
-    let py_beam = extract_scalar("Py_Beam", &dataframe, ReadType::F32);
-    let e_finalstate = extract_vector("E_FinalState", &dataframe, ReadType::F32);
-    let px_finalstate = extract_vector("Px_FinalState", &dataframe, ReadType::F32);
-    let py_finalstate = extract_vector("Py_FinalState", &dataframe, ReadType::F32);
-    let pz_finalstate = extract_vector("Pz_FinalState", &dataframe, ReadType::F32);
-    let zero_vec = vec![0.0; e_beam.len()];
-    let beam_four_momentum =
-        scalars_to_momentum(e_beam.clone(), zero_vec.clone(), zero_vec, e_beam);
-    let eps_array: Vec<Vector3<f64>> = px_beam
-        .into_par_iter()
-        .zip(py_beam.into_par_iter())
-        .map(|(px, py)| Vector3::new(px, py, 0.0))
-        .collect();
-    let final_state_four_momentum =
-        vectors_to_momenta(e_finalstate, px_finalstate, py_finalstate, pz_finalstate);
-    let weight = extract_scalar("Weight", &dataframe, ReadType::F32);
-    let mut dataset = Dataset::new();
-    dataset.events = (
-        beam_four_momentum,
-        final_state_four_momentum,
-        weight,
-        eps_array,
-    )
-        .into_par_iter()
-        .map(|(beam_p4, fs, weight, eps)| GlueXPolarizedEvent {
-            weight,
-            beam_p4,
-            recoil_p4: fs[0],
-            daughter_p4s: fs[1..].to_vec(),
-            eps,
-        })
-        .collect();
-    dataset
-}
 
 #[derive(Clone, Copy)]
 #[rustfmt::skip]
@@ -354,8 +506,7 @@ fn c_matrix<const C: usize, const R: usize>(
     }))
 }
 fn z(s: f64, m1: f64, m2: f64) -> Complex64 {
-    let q = rho(s, m1, m2) * s.sqrt() / 2.0;
-    q * q / (0.1973 * 0.1973)
+    rho(s, m1, m2).powi(2) * s / (2.0 * 0.1973 * 0.1973)
 }
 fn blatt_weisskopf(s: f64, m1: f64, m2: f64, l: usize) -> Complex64 {
     let z = z(s, m1, m2);
@@ -401,7 +552,6 @@ fn k_matrix<const C: usize, const R: usize>(
     let bf = barrier_matrix(s, constants);
     SMatrix::from_fn(|i, j| {
         (0..R)
-            .into_iter()
             .map(|a| {
                 bf[(i, a)]
                     * bf[(j, a)]
@@ -427,30 +577,23 @@ fn ikc_inv<const C: usize, const R: usize>(
     ikc_inv_mat.row(channel).transpose()
 }
 fn p_vector<const C: usize, const R: usize>(
-    betas: &SVector<Complex64, C>,
-    s: f64,
-    constants: &KMatrixConstants<C, R>,
-    barrier_factor: &SMatrix<Complex64, C, R>,
+    betas: &SVector<Complex64, R>,
+    pvector_constants: &SMatrix<Complex64, C, R>,
 ) -> SVector<Complex64, C> {
     SVector::<Complex64, C>::from_fn(|j, _| {
-        (0..R)
-            .into_iter()
-            .map(|a| {
-                betas[a] * constants.g[(j, a)] / (constants.mrs[a].powi(2) - s)
-                    * barrier_factor[(j, a)]
-            })
-            .sum()
+        (0..R).map(|a| betas[a] * pvector_constants[(j, a)]).sum()
     })
 }
 
-fn calculate_k_matrix<const C: usize, const R: usize>(
-    betas: &SVector<Complex64, C>,
-    s: f64,
-    constants: &KMatrixConstants<C, R>,
-    barrier_factor: &SMatrix<Complex64, C, R>,
-    ikc_inv_vec: &SVector<Complex64, C>,
-) -> Complex64 {
-    ikc_inv_vec.dot(&p_vector(betas, s, constants, barrier_factor))
+pub fn calculate_k_matrix<const C: usize, const R: usize, T>(
+    _event: &T,
+    betas: &SVector<Complex64, R>,
+    precalc_data: &(SVector<Complex64, C>, SMatrix<Complex64, C, R>),
+) -> Complex64
+where
+    T: Event + DaughterP4s,
+{
+    precalc_data.0.dot(&p_vector(betas, &precalc_data.1))
 }
 
 #[rustfmt::skip]
@@ -482,25 +625,16 @@ const F0: KMatrixConstants<5, 5> = KMatrixConstants {
 pub fn precalculate_k_matrix_f0<T>(
     event: &T,
     channel: usize,
-) -> (SMatrix<Complex64, 5, 5>, SVector<Complex64, 5>)
+) -> (SVector<Complex64, 5>, SMatrix<Complex64, 5, 5>)
 where
     T: Event + DaughterP4s,
 {
     let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-    (barrier_matrix(s, &F0), ikc_inv(s, &F0, channel))
-}
-
-pub fn calculate_k_matrix_f0<T>(
-    event: &T,
-    betas: &SVector<Complex64, 5>,
-    barrier_factor: &SMatrix<Complex64, 5, 5>,
-    ikc_inv_vec: &SVector<Complex64, 5>,
-) -> Complex64
-where
-    T: Event + DaughterP4s,
-{
-    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-    calculate_k_matrix(betas, s, &F0, barrier_factor, ikc_inv_vec)
+    let barrier_mat = barrier_matrix(s, &F0);
+    let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
+        barrier_mat[(i, a)] * F0.g[(i, a)] / (F0.mrs[a].powi(2) - s)
+    });
+    (ikc_inv(s, &F0, channel), pvector_constants)
 }
 
 #[rustfmt::skip]

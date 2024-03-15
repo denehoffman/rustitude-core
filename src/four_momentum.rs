@@ -8,11 +8,11 @@ use std::{
 use std::simd::prelude::*;
 
 #[cfg(not(feature = "simd"))]
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub struct FourMomentum([f64; 4]);
 
 #[cfg(feature = "simd")]
-#[derive(Debug, Clone, PartialEq, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub struct FourMomentum(f64x4);
 
 impl Eq for FourMomentum {}
@@ -25,7 +25,7 @@ impl Display for FourMomentum {
             self.e(),
             self.px(),
             self.py(),
-            self.pz()
+            self.pz(),
         )
     }
 }
@@ -45,6 +45,15 @@ impl FourMomentum {
     //! let vec_b = FourMomentum::new(4.2, 0.5, 0.4, 0.5);
     //! ```
 
+    #[cfg(not(feature = "simd"))]
+    pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
+        //! Create a new [`FourMomentum`] from energy and momentum components.
+        //!
+        //! Components are listed in the order $` (E, p_x, p_y, p_z) `$
+        Self([e, px, py, pz])
+    }
+
+    #[cfg(feature = "simd")]
     pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
         //! Create a new [`FourMomentum`] from energy and momentum components.
         //!
@@ -63,6 +72,19 @@ impl FourMomentum {
     }
     pub fn pz(&self) -> f64 {
         self.0[3]
+    }
+
+    pub fn set_e(&mut self, value: f64) {
+        self.0[0] = value;
+    }
+    pub fn set_px(&mut self, value: f64) {
+        self.0[1] = value;
+    }
+    pub fn set_py(&mut self, value: f64) {
+        self.0[2] = value;
+    }
+    pub fn set_pz(&mut self, value: f64) {
+        self.0[3] = value;
     }
 
     pub fn momentum(&self) -> Vector3<f64> {
@@ -302,12 +324,6 @@ impl Sub for &FourMomentum {
     type Output = <FourMomentum as Sub>::Output;
     fn sub(self, rhs: &FourMomentum) -> Self::Output {
         FourMomentum::sub(*self, *rhs)
-    }
-}
-
-impl Default for FourMomentum {
-    fn default() -> Self {
-        FourMomentum([0.0, 0.0, 0.0, 0.0].into())
     }
 }
 

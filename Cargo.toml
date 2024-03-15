@@ -22,7 +22,6 @@ nalgebra = "0.32.3"
 num = "0.4.1"
 num-complex = "0.4.4"
 num-traits = "0.2.17"
-polars = { version = "0.38.2", features = ["parquet"] }
 sphrs = "0.2.2"
 thiserror = "1.0.51"
 derive_more = { version = "0.99.17", default-features = false, features = [
@@ -36,6 +35,7 @@ rustc-hash = "1.1.0"
 variantly = "0.4.0"
 anyinput = "0.1.6"
 uuid = { version = "1.7.0", features = ["v4"] }
+parquet = "50.0.0"
 
 [features]
 simd = []
@@ -50,6 +50,10 @@ debug = true
 
 [[bench]]
 name = "simd_benchmark"
+harness = false
+
+[[bench]]
+name = "kmatrix_benchmark"
 harness = false
 
 
