@@ -27,6 +27,16 @@ where
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.events.iter_mut()
     }
+    pub fn convert<U>(self) -> Dataset<U>
+    where
+        U: Event + From<T>,
+    {
+        let events: Vec<U> = self.events.into_iter().map(|event| event.into()).collect();
+        Dataset {
+            uuid: self.uuid,
+            events,
+        }
+    }
 }
 impl<T> Default for Dataset<T>
 where

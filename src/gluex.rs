@@ -1,8 +1,7 @@
 use std::{f64::consts::PI, fmt::Display, fs::File, path::Path};
 
 use crate::{
-    dataset::{Dataset, Event},
-    prelude::FourMomentum,
+    amplitude::ParameterSet, dataset::{Dataset, Event}, prelude::{Amplitude, FourMomentum}
 };
 
 use nalgebra::{ComplexField, SMatrix, SVector, Vector3};
@@ -11,7 +10,10 @@ use parquet::{
     file::reader::{FileReader, SerializedFileReader},
     record::{Field, Row},
 };
+use rayon::prelude::*;
+use rustc_hash::FxHashMap as HashMap;
 use sphrs::{ComplexSH, Coordinates, SHEval};
+use uuid::Uuid;
 
 pub trait Weight {
     fn weight(&self) -> &f64;
@@ -52,7 +54,6 @@ impl GlueXEvent {
         }
     }
 }
-
 impl Event for GlueXEvent {}
 impl Weight for GlueXEvent {
     fn weight(&self) -> &f64 {
@@ -173,6 +174,16 @@ impl From<Row> for GlueXEvent {
             .collect();
         event.ensure_com_boost();
         event
+    }
+}
+impl From<GlueXPolarizedEvent> for GlueXEvent {
+    fn from(event: GlueXPolarizedEvent) -> Self {
+        GlueXEvent {
+            weight: event.weight,
+            beam_p4: event.beam_p4,
+            recoil_p4: event.recoil_p4,
+            daughter_p4s: event.daughter_p4s,
+        }
     }
 }
 
@@ -349,10 +360,12 @@ pub fn open_gluex_pol_in_beam_parquet(path: &str) -> Dataset<GlueXPolarizedEvent
 // NOTE TO SELF: for now we'll assume these are COM boosted, but we can add in a thing to do it
 // automatically later, maybe a COM boost function
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 #[rustfmt::skip]
 pub enum Wave {
-    S0, S,
+    #[default]
+    S,
+    S0,
     Pn1, P0, P1, P,
     Dn2, Dn1, D0, D1, D2, D,
     Fn3, Fn2, Fn1, F0, F1, F2, F3, F,
@@ -395,26 +408,52 @@ impl Display for Wave {
     }
 }
 
-pub fn ylm<T>(event: &T, wave: Wave) -> Complex64
-where
-    T: Event + BeamP4 + RecoilP4 + DaughterP4s,
-{
-    let resonance = event.daughter_p4s()[0] + event.daughter_p4s()[1];
-    let p1 = event.daughter_p4s()[0];
-    let recoil_res = event.recoil_p4().boost_along(&resonance);
-    let p1_res = p1.boost_along(&resonance);
-    let z = -1.0 * recoil_res.momentum().normalize();
-    let y = event
-        .beam_p4()
-        .momentum()
-        .cross(&(-1.0 * event.recoil_p4().momentum()));
-    let x = y.cross(&z);
-    let p1_vec = p1_res.momentum();
-    let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
-    ComplexSH::Spherical.eval(wave.l(), wave.m(), &p)
+#[derive(Default)]
+pub struct Ylm {
+    wave: Wave,
+    data: HashMap<Uuid, Vec<Complex64>>,
+}
+impl Ylm {
+    pub fn new(wave: Wave) -> Self {
+        Ylm {
+            wave,
+            ..Default::default()
+        }
+    }
+}
+impl<T: Event + BeamP4 + RecoilP4 + DaughterP4s + Sync> Amplitude<T> for Ylm {
+    fn calculate(
+        &mut self,
+        _parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let resonance = event.daughter_p4s()[0] + event.daughter_p4s()[1];
+                    let p1 = event.daughter_p4s()[0];
+                    let recoil_res = event.recoil_p4().boost_along(&resonance);
+                    let p1_res = p1.boost_along(&resonance);
+                    let z = -1.0 * recoil_res.momentum().normalize();
+                    let y = event
+                        .beam_p4()
+                        .momentum()
+                        .cross(&(-1.0 * event.recoil_p4().momentum()));
+                    let x = y.cross(&z);
+                    let p1_vec = p1_res.momentum();
+                    let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+                    ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p)
+            }).collect()
+        });
+        precalcs.to_vec()
+    }
 }
 
+#[derive(Default)]
 pub enum Reflectivity {
+    #[default]
     Positive,
     Negative,
 }
@@ -427,6 +466,73 @@ impl Display for Reflectivity {
         }
     }
 }
+
+#[derive(Default)]
+pub struct Zlm {
+    wave: Wave,
+    reflectivity: Reflectivity,
+    data: HashMap<Uuid, Vec<Complex64>>,
+}
+impl Zlm {
+    pub fn new(wave: Wave, reflectivity: Reflectivity) -> Self {
+        Zlm {
+            wave,
+            reflectivity,
+            ..Default::default()
+        }
+    }
+}
+impl<T: Event + BeamP4 + RecoilP4 + DaughterP4s + Polarized + Sync> Amplitude<T> for Zlm {
+    fn calculate(
+        &mut self,
+        _parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let resonance = event.daughter_p4s()[0] + event.daughter_p4s()[1];
+                    let p1 = event.daughter_p4s()[0];
+                    let recoil_res = event.recoil_p4().boost_along(&resonance);
+                    let p1_res = p1.boost_along(&resonance);
+                    let z = -1.0 * recoil_res.momentum().normalize();
+                    let y = event
+                        .beam_p4()
+                        .momentum()
+                        .cross(&(-1.0 * event.recoil_p4().momentum()));
+                    let x = y.cross(&z);
+                    let p1_vec = p1_res.momentum();
+                    let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+                    let ylm = ComplexSH::Spherical.eval(self.wave.l(), self.wave.m(), &p);
+                    let big_phi = y.dot(event.eps()).atan2(
+                        event
+                            .beam_p4()
+                            .momentum()
+                            .normalize()
+                            .dot(&event.eps().cross(&y)),
+                    );
+                    let pgamma = event.eps().norm();
+
+                    let phase = Complex64::cis(-big_phi);
+                    let zlm = ylm * phase;
+                    match self.reflectivity {
+                        Reflectivity::Positive => Complex64::new(
+                            (1.0 + pgamma).sqrt() * zlm.re,
+                            (1.0 - pgamma).sqrt() * zlm.im,
+                        ),
+                        Reflectivity::Negative => Complex64::new(
+                            (1.0 - pgamma).sqrt() * zlm.re,
+                            (1.0 + pgamma).sqrt() * zlm.im,
+                        ),
+                    }
+            }).collect()
+        });
+        precalcs.to_vec()
+    }
+}
+
 
 pub fn zlm<T>(event: &T, wave: Wave, reflectivity: Reflectivity) -> Complex64
 where
@@ -622,19 +728,57 @@ const F0: KMatrixConstants<5, 5> = KMatrixConstants {
     l: 0,
 };
 
-pub fn precalculate_k_matrix_f0<T>(
-    event: &T,
-    channel: usize,
-) -> (SVector<Complex64, 5>, SMatrix<Complex64, 5, 5>)
-where
-    T: Event + DaughterP4s,
-{
-    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-    let barrier_mat = barrier_matrix(s, &F0);
-    let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
-        barrier_mat[(i, a)] * F0.g[(i, a)] / (F0.mrs[a].powi(2) - s)
-    });
-    (ikc_inv(s, &F0, channel), pvector_constants)
+#[derive(Default)]
+pub struct KMatrixF0 {
+    data: HashMap<Uuid, Vec<(SVector<Complex64, 5>, SMatrix<Complex64, 5, 5>)>>,
+}
+
+impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixF0 {
+    fn calculate(
+        &mut self,
+        parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+                    let barrier_mat = barrier_matrix(s, &F0);
+                    let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
+                        barrier_mat[(i, a)] * F0.g[(i, a)] / (F0.mrs[a].powi(2) - s)
+                    });
+                    (ikc_inv(s, &F0, 2), pvector_constants)
+                })
+                .collect()
+        });
+        let betas = SVector::<Complex64, 5>::new(
+            Complex64::new(parameters.get("f0_500 re"),parameters.get("f0_500 im")),
+            Complex64::new(
+                parameters.get("f0_980 re"),
+                parameters.get("f0_980 im"),
+            ),
+            Complex64::new(
+                parameters.get("f0_1370 re"),
+                parameters.get("f0_1370 im"),
+            ),
+            Complex64::new(
+                parameters.get("f0_1500 re"),
+                parameters.get("f0_1500 im"),
+            ),
+            Complex64::new(
+                parameters.get("f0_1710 re"),
+                parameters.get("f0_1710 im"),
+            ),
+        );
+        dataset
+            .events
+            .par_iter()
+            .zip(precalcs)
+            .map(|(event, precalc)| calculate_k_matrix(event, &betas, precalc))
+            .collect()
+    }
 }
 
 #[rustfmt::skip]
@@ -658,6 +802,58 @@ const F2: KMatrixConstants<4, 4> = KMatrixConstants {
     l: 2,
 };
 
+#[derive(Default)]
+pub struct KMatrixF2 {
+    data: HashMap<Uuid, Vec<(SVector<Complex64, 4>, SMatrix<Complex64, 4, 4>)>>,
+}
+
+impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixF2 {
+    fn calculate(
+        &mut self,
+        parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+                    let barrier_mat = barrier_matrix(s, &F2);
+                    let pvector_constants = SMatrix::<Complex64, 4, 4>::from_fn(|i, a| {
+                        barrier_mat[(i, a)] * F2.g[(i, a)] / (F2.mrs[a].powi(2) - s)
+                    });
+                    (ikc_inv(s, &F2, 2), pvector_constants)
+                })
+                .collect()
+        });
+        let betas = SVector::<Complex64, 4>::new(
+            Complex64::new(
+                parameters.get("f2_1270 re"),
+                parameters.get("f2_1270 im"),
+            ),
+            Complex64::new(
+                parameters.get("f2_1525 re"),
+                parameters.get("f2_1525 im"),
+            ),
+            Complex64::new(
+                parameters.get("f2_1810 re"),
+                parameters.get("f2_1810 im"),
+            ),
+            Complex64::new(
+                parameters.get("f2_1950 re"),
+                parameters.get("f2_1950 im"),
+            ),
+        );
+        dataset
+            .events
+            .par_iter()
+            .zip(precalcs)
+            .map(|(event, precalc)| calculate_k_matrix(event, &betas, precalc))
+            .collect()
+    }
+}
+
 #[rustfmt::skip]
 const A0: KMatrixConstants<2, 2> = KMatrixConstants {
     g: SMatrix::<f64, 2, 2>::new(
@@ -675,6 +871,50 @@ const A0: KMatrixConstants<2, 2> = KMatrixConstants {
     l: 0,
 };
 
+#[derive(Default)]
+pub struct KMatrixA0 {
+    data: HashMap<Uuid, Vec<(SVector<Complex64, 2>, SMatrix<Complex64, 2, 2>)>>,
+}
+
+impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixA0 {
+    fn calculate(
+        &mut self,
+        parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+                    let barrier_mat = barrier_matrix(s, &A0);
+                    let pvector_constants = SMatrix::<Complex64, 2, 2>::from_fn(|i, a| {
+                        barrier_mat[(i, a)] * A0.g[(i, a)] / (A0.mrs[a].powi(2) - s)
+                    });
+                    (ikc_inv(s, &A0, 1), pvector_constants)
+                })
+                .collect()
+        });
+        let betas = SVector::<Complex64, 2>::new(
+            Complex64::new(
+                parameters.get("a0_980 re"),
+                parameters.get("a0_980 im"),
+            ),
+            Complex64::new(
+                parameters.get("a0_1450 re"),
+                parameters.get("a0_1450 im"),
+            ),
+        );
+        dataset
+            .events
+            .par_iter()
+            .zip(precalcs)
+            .map(|(event, precalc)| calculate_k_matrix(event, &betas, precalc))
+            .collect()
+    }
+}
+
 #[rustfmt::skip]
 const A2: KMatrixConstants<3, 2> = KMatrixConstants {
     g: SMatrix::<f64, 3, 2>::new(
@@ -691,3 +931,47 @@ const A2: KMatrixConstants<3, 2> = KMatrixConstants {
     adler_zero: None,
     l: 2,
 };
+
+#[derive(Default)]
+pub struct KMatrixA2 {
+    data: HashMap<Uuid, Vec<(SVector<Complex64, 3>, SMatrix<Complex64, 3, 2>)>>,
+}
+
+impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixA2 {
+    fn calculate(
+        &mut self,
+        parameters: &ParameterSet,
+        dataset: &Dataset<T>,
+    ) -> Vec<Complex64> {
+        let precalcs = self.data.entry(dataset.uuid).or_insert_with(|| {
+            dataset
+                .events
+                .par_iter()
+                .map(|event| {
+                    let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
+                    let barrier_mat = barrier_matrix(s, &A2);
+                    let pvector_constants = SMatrix::<Complex64, 3, 2>::from_fn(|i, a| {
+                        barrier_mat[(i, a)] * A2.g[(i, a)] / (A2.mrs[a].powi(2) - s)
+                    });
+                    (ikc_inv(s, &A2, 1), pvector_constants)
+                })
+                .collect()
+        });
+        let betas = SVector::<Complex64, 2>::new(
+            Complex64::new(
+                parameters.get("a2_1320 re"),
+                parameters.get("a2_1320 im"),
+            ),
+            Complex64::new(
+                parameters.get("a2_1700 re"),
+                parameters.get("a2_1700 im"),
+            ),
+        );
+        dataset
+            .events
+            .par_iter()
+            .zip(precalcs)
+            .map(|(event, precalc)| calculate_k_matrix(event, &betas, precalc))
+            .collect()
+    }
+}

@@ -36,6 +36,7 @@ variantly = "0.4.0"
 anyinput = "0.1.6"
 uuid = { version = "1.7.0", features = ["v4"] }
 parquet = "50.0.0"
+rand = "0.8.5"
 
 [features]
 simd = []
