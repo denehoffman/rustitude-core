@@ -1,48 +1,31 @@
-use uuid::Uuid;
+use rayon::prelude::*;
 
-pub trait Event {}
-pub struct Dataset<T>
-where
-    T: Event,
-{
-    pub uuid: Uuid,
-    pub events: Vec<T>,
-}
+pub trait Event: Sync + Send {}
+
+#[derive(Default)]
+pub struct Dataset<T: Event>(Vec<T>);
 
 impl<T> Dataset<T>
 where
     T: Event,
 {
-    pub fn new() -> Self {
-        Dataset {
-            uuid: Uuid::new_v4(),
-            events: Vec::new(),
-        }
+    pub fn new(data: Vec<T>) -> Self {
+        Dataset(data)
     }
 
     pub fn iter(&self) -> std::slice::Iter<'_, T> {
-        self.events.iter()
+        self.0.iter()
     }
 
     pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
-        self.events.iter_mut()
+        self.0.iter_mut()
     }
-    pub fn convert<U>(self) -> Dataset<U>
-    where
-        U: Event + From<T>,
-    {
-        let events: Vec<U> = self.events.into_iter().map(|event| event.into()).collect();
-        Dataset {
-            uuid: self.uuid,
-            events,
-        }
+
+    pub fn par_iter(&self) -> rayon::slice::Iter<'_, T> {
+        self.0.par_iter()
     }
-}
-impl<T> Default for Dataset<T>
-where
-    T: Event,
-{
-    fn default() -> Self {
-        Self::new()
+
+    pub fn par_iter_mut(&mut self) -> rayon::slice::IterMut<'_, T> {
+        self.0.par_iter_mut()
     }
 }
