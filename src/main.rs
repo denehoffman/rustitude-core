@@ -1,48 +1,34 @@
-use std::hint::black_box;
+use std::sync::Arc;
 
 use num_complex::Complex64;
-use rand::prelude::*;
-
-use rustc_hash::FxHashMap as HashMap;
-use rustitude::amplitude::{Amplitude, Node};
-use rustitude::dataset::Event;
-use rustitude::gluex::{open_gluex_pol_in_beam_parquet, KMatrixF0, Wave, Ylm};
-
-use uuid::Uuid;
-
-#[derive(Default)]
-struct Wrapper<E: Event> {
-    nodes: Vec<Box<dyn Node<E>>>,
-}
+use rayon::prelude::*;
+use rustitude::amplitude::Manager;
+use rustitude::gluex::{Wave, Ylm};
+use rustitude::prelude::*;
 
 fn main() {
-    let ds = open_gluex_pol_in_beam_parquet("data_pol.parquet");
-    let mut f0_kmatrix = KMatrixF0::default();
-    let mut ylm00 = Ylm::new(Wave::S0);
-    ylm00.precalculate(&ds);
-    f0_kmatrix.precalculate(&ds);
-    let a = ylm00.calculate(0, ds.iter().next().unwrap(), &Vec::new());
-    let b = f0_kmatrix.calculate(0, ds.iter().next().unwrap(), &vec![1.0; 10]);
-    let mut w = Wrapper::default();
-    w.nodes.push(Box::new(f0_kmatrix));
-    // let mut f0_amplitude = Amplitude::new(&ds, &mut f0_kmatrix);
-    // f0_amplitude.precompute();
-    // let mut rng = rand::thread_rng();
-    // let mut f0_kmatrix_params: HashMap<String, f64> = HashMap::default();
-    // f0_kmatrix_params.insert("f0_500 re".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_500 im".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_980 re".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_980 im".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1370 re".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1370 im".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1500 re".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1500 im".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1710 re".to_string(), rng.gen());
-    // f0_kmatrix_params.insert("f0_1710 im".to_string(), rng.gen());
-    // let mut params: HashMap<Uuid, HashMap<String, f64>> = HashMap::default();
-    // params.insert(f0_amplitude.uuid, f0_kmatrix_params);
-    // for _ in 0..200 {
-    //     let kmat_f0: Vec<Complex64> = f0_amplitude.compute(&params);
-    //     black_box(kmat_f0);
-    // }
+    let ds = Dataset::from_parquet("data_pol.parquet", true);
+    let mut ta = Amplitude::new("S0", Ylm(Wave::S0));
+    let mut tb = Amplitude::new("D2", Ylm(Wave::D2));
+    let mut tc = Amplitude::new("P1", Ylm(Wave::P1));
+    let p1 = Amplitude::cscalar("Param");
+    let mut m = Manager::new(&ds);
+    ta.precompute(&ds);
+    tb.precompute(&ds);
+    tc.precompute(&ds);
+    let ata = Arc::new(ta);
+    let atb = Arc::new(tb);
+    let atc = Arc::new(tc);
+    let ap1 = Arc::new(p1);
+    m.register("sum1", "Term1", &ata);
+    m.register("sum1", "Term1", &atb);
+    m.register("sum1", "Term1", &ap1);
+    m.register("sum1", "Term2", &atc);
+    m.register("sum2", "Term3", &ata);
+    dbg!(&m.sums);
+    let test = m.compute(&vec![
+        vec![vec![vec![], vec![], vec![100.0, 100.0]]],
+        vec![vec![vec![]]],
+    ]);
+    dbg!(test[0]);
 }
