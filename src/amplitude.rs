@@ -4,7 +4,7 @@ use rustc_hash::FxHashMap;
 use std::{
     borrow::BorrowMut,
     cell::RefCell,
-    collections::hash_map::Entry,
+    collections::{hash_map::Entry, BTreeMap, BTreeSet},
     fmt::Debug,
     sync::{Arc, Mutex},
 };
@@ -21,7 +21,7 @@ pub trait Node: Sync + Send {
 
 pub struct Amplitude {
     name: String,
-    amplitude: Box<dyn Node>,
+    node: Box<dyn Node>,
     aux_data: Vec<Vec<f64>>,
 }
 impl Debug for Amplitude {
@@ -34,36 +34,41 @@ impl Debug for Amplitude {
     }
 }
 impl Amplitude {
-    pub fn new<A: Node + 'static>(name: &str, amplitude: A) -> Self {
+    pub fn new<N: Node + 'static>(name: &str, node: N) -> Self {
         Self {
             name: name.to_string(),
-            amplitude: Box::new(amplitude),
+            node: Box::new(node),
             aux_data: Vec::default(),
         }
     }
     pub fn scalar(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            amplitude: Box::new(Scalar),
+            node: Box::new(Scalar),
             aux_data: Vec::default(),
         }
     }
     pub fn cscalar(name: &str) -> Self {
         Self {
             name: name.to_string(),
-            amplitude: Box::new(ComplexScalar),
+            node: Box::new(ComplexScalar),
             aux_data: Vec::default(),
         }
     }
     pub fn precompute(&mut self, dataset: &Dataset) {
         self.aux_data = dataset
             .par_iter()
-            .map(|event| self.amplitude.precalculate(event))
+            .map(|event| self.node.precalculate(event))
             .collect();
     }
     pub fn compute(&self, parameters: &Vec<f64>, index: usize, dataset: &Dataset) -> Complex64 {
-        self.amplitude
-            .calculate(parameters, &dataset.events[index], &self.aux_data[index])
+        if self.aux_data.len() == 0 {
+            self.node
+                .calculate(parameters, &dataset.events[index], &vec![])
+        } else {
+            self.node
+                .calculate(parameters, &dataset.events[index], &self.aux_data[index])
+        }
     }
 }
 
@@ -95,15 +100,19 @@ impl Node for ComplexScalar {
 pub struct Parameter(String, f64);
 
 pub struct Manager<'d> {
-    pub sums: FxHashMap<String, FxHashMap<String, Vec<Arc<Amplitude>>>>,
+    pub sums: BTreeMap<String, BTreeMap<String, Vec<Arc<Amplitude>>>>,
+    pub pars: BTreeMap<String, BTreeMap<String, Vec<Vec<(String, usize)>>>>,
     data: &'d Dataset,
+    variable_count: usize,
 }
 
 impl<'d> Manager<'d> {
     pub fn new(dataset: &'d Dataset) -> Self {
         Self {
-            sums: FxHashMap::default(),
+            sums: BTreeMap::default(),
+            pars: BTreeMap::default(),
             data: dataset,
+            variable_count: 0,
         }
     }
     pub fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<Amplitude>) {
@@ -116,65 +125,70 @@ impl<'d> Manager<'d> {
                     .or_insert(vec![Arc::clone(amplitude)]);
             })
             .or_insert_with(|| {
-                let mut sum_map = FxHashMap::default();
+                let mut sum_map = BTreeMap::default();
                 sum_map.insert(group_name.to_string(), vec![Arc::clone(amplitude)]);
                 sum_map
             });
-    }
-    fn _compute(
-        &self,
-        parameters: &Vec<Vec<Vec<Vec<f64>>>>,
-        index: usize,
-        dataset: &Dataset,
-    ) -> f64 {
-        // TODO: needs a fix, I forgot that hashmap values aren't ordered...
-        let mut res = 0.0;
-        for ((sum_name, sum), sum_parameters) in self.sums.iter().zip(parameters) {
-            println!("In sum: {sum_name}");
-            let mut sum_tot = Complex64::new(0.0, 0.0);
-            for ((term_name, term), term_parameters) in sum.iter().zip(sum_parameters) {
-                println!("In term: {term_name}");
-                let mut term_tot = Complex64::new(1.0, 0.0);
-                for (amp, amp_parameters) in term.iter().zip(term_parameters) {
-                    println!("Evaluating: {}", amp.name);
-                    term_tot *= amp.compute(amp_parameters, index, dataset);
-                }
-                sum_tot += term_tot;
+        let mut pars: Vec<(String, usize)> = Vec::new();
+        if let Some(parameter_names) = amplitude.node.parameters() {
+            for parameter_name in parameter_names {
+                pars.push((
+                    format!("{}::{}", amplitude.name, parameter_name.clone()),
+                    self.variable_count,
+                ));
+                self.variable_count += 1;
             }
-            res += sum_tot.norm_sqr();
         }
-        res
-        // self.sums
-        //     .values()
-        //     .zip(parameters)
-        //     .map(|(sum, sum_parameters)| {
-        //         sum.values()
-        //             .zip(sum_parameters)
-        //             .map(|(term, term_parameters)| {
-        //                 term.iter()
-        //                     .zip(term_parameters)
-        //                     .map(|(arcnode, amp_parameters)| {
-        //                         arcnode.compute(amp_parameters, index, dataset)
-        //                     })
-        //                     .product::<Complex64>()
-        //             })
-        //             .sum::<Complex64>()
-        //             .norm_sqr()
-        //     })
-        //     .sum()
+        self.pars
+            .entry(sum_name.to_string())
+            .and_modify(|sum_entry| {
+                sum_entry
+                    .entry(group_name.to_string())
+                    .and_modify(|group_entry| group_entry.push(pars.clone()))
+                    .or_insert(vec![pars.clone()]);
+            })
+            .or_insert_with(|| {
+                let mut sum_map = BTreeMap::default();
+                sum_map.insert(group_name.to_string(), vec![pars]);
+                sum_map
+            });
     }
-    pub fn compute(&self, parameters: &Vec<Vec<Vec<Vec<f64>>>>) -> Vec<f64> {
+    fn _compute(&self, parameters: &Vec<f64>, index: usize, dataset: &Dataset) -> f64 {
+        self.sums
+            .values()
+            .zip(self.pars.values())
+            .map(|(sum, sum_parameters)| {
+                sum.values()
+                    .zip(sum_parameters.values())
+                    .map(|(term, term_parameters)| {
+                        term.iter()
+                            .zip(term_parameters)
+                            .map(|(arcnode, arcnode_parameters)| {
+                                let amp_parameters = &arcnode_parameters
+                                    .iter()
+                                    .map(|param| parameters[param.1])
+                                    .collect();
+                                arcnode.compute(amp_parameters, index, dataset)
+                            })
+                            .product::<Complex64>()
+                    })
+                    .sum::<Complex64>()
+                    .norm_sqr()
+            })
+            .sum()
+    }
+    pub fn compute(&self, parameters: Vec<f64>) -> Vec<f64> {
         (0..self.data.len())
             .into_iter()
-            .map(|index| self._compute(parameters, index, self.data))
+            .map(|index| self._compute(&parameters, index, self.data))
             .collect()
     }
 }
 
-impl<'d> CostFunction for Manager<'d> {
-    type Param = Vec<Vec<Vec<Vec<f64>>>>;
-    type Output = f64;
-    fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin_math::Error> {
-        Ok(self.compute(param).iter().sum())
-    }
-}
+// impl<'d> CostFunction for Manager<'d> {
+//     type Param = Vec<Vec<Vec<Vec<f64>>>>;
+//     type Output = f64;
+//     fn cost(&self, param: &Self::Param) -> Result<Self::Output, argmin_math::Error> {
+//         Ok(self.compute(param).iter().sum())
+//     }
+// }
