@@ -1,13 +1,5 @@
-use argmin::core::CostFunction;
 use rayon::prelude::*;
-use rustc_hash::FxHashMap;
-use std::{
-    borrow::BorrowMut,
-    cell::RefCell,
-    collections::{hash_map::Entry, BTreeMap, BTreeSet},
-    fmt::Debug,
-    sync::{Arc, Mutex},
-};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use num_complex::Complex64;
 
@@ -15,7 +7,7 @@ use crate::{dataset::Event, prelude::Dataset};
 
 pub trait Node: Sync + Send {
     fn precalculate(&self, event: &Event) -> Vec<f64>;
-    fn calculate(&self, parameters: &Vec<f64>, event: &Event, aux_data: &Vec<f64>) -> Complex64;
+    fn calculate(&self, parameters: &[f64], event: &Event, aux_data: &[f64]) -> Complex64;
     fn parameters(&self) -> Option<Vec<String>>;
 }
 
@@ -62,7 +54,7 @@ impl Amplitude {
             .collect();
     }
     pub fn compute(&self, parameters: &Vec<f64>, index: usize, dataset: &Dataset) -> Complex64 {
-        if self.aux_data.len() == 0 {
+        if self.aux_data.is_empty() {
             self.node
                 .calculate(parameters, &dataset.events[index], &vec![])
         } else {
@@ -77,7 +69,7 @@ impl Node for Scalar {
     fn precalculate(&self, _event: &Event) -> Vec<f64> {
         Vec::default()
     }
-    fn calculate(&self, parameters: &Vec<f64>, _event: &Event, _aux_data: &Vec<f64>) -> Complex64 {
+    fn calculate(&self, parameters: &[f64], _event: &Event, _aux_data: &[f64]) -> Complex64 {
         parameters[0].into()
     }
     fn parameters(&self) -> Option<Vec<String>> {
@@ -89,7 +81,7 @@ impl Node for ComplexScalar {
     fn precalculate(&self, _event: &Event) -> Vec<f64> {
         Vec::default()
     }
-    fn calculate(&self, parameters: &Vec<f64>, _event: &Event, _aux_data: &Vec<f64>) -> Complex64 {
+    fn calculate(&self, parameters: &[f64], _event: &Event, _aux_data: &[f64]) -> Complex64 {
         Complex64::new(parameters[0], parameters[1])
     }
     fn parameters(&self) -> Option<Vec<String>> {
@@ -99,9 +91,12 @@ impl Node for ComplexScalar {
 
 pub struct Parameter(String, f64);
 
+type SumMap = BTreeMap<String, BTreeMap<String, Vec<Arc<Amplitude>>>>;
+type ParMap = BTreeMap<String, BTreeMap<String, Vec<Vec<(String, usize)>>>>;
+
 pub struct Manager<'d> {
-    pub sums: BTreeMap<String, BTreeMap<String, Vec<Arc<Amplitude>>>>,
-    pub pars: BTreeMap<String, BTreeMap<String, Vec<Vec<(String, usize)>>>>,
+    pub sums: SumMap,
+    pub pars: ParMap,
     data: &'d Dataset,
     variable_count: usize,
 }
@@ -109,8 +104,8 @@ pub struct Manager<'d> {
 impl<'d> Manager<'d> {
     pub fn new(dataset: &'d Dataset) -> Self {
         Self {
-            sums: BTreeMap::default(),
-            pars: BTreeMap::default(),
+            sums: SumMap::default(),
+            pars: ParMap::default(),
             data: dataset,
             variable_count: 0,
         }
@@ -153,7 +148,7 @@ impl<'d> Manager<'d> {
                 sum_map
             });
     }
-    fn _compute(&self, parameters: &Vec<f64>, index: usize, dataset: &Dataset) -> f64 {
+    fn _compute(&self, parameters: &[f64], index: usize, dataset: &Dataset) -> f64 {
         self.sums
             .values()
             .zip(self.pars.values())
@@ -179,7 +174,6 @@ impl<'d> Manager<'d> {
     }
     pub fn compute(&self, parameters: Vec<f64>) -> Vec<f64> {
         (0..self.data.len())
-            .into_iter()
             .map(|index| self._compute(&parameters, index, self.data))
             .collect()
     }
