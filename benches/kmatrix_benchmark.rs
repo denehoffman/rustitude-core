@@ -1,12 +1,8 @@
 use std::sync::Arc;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use num_complex::Complex64;
 use rand::prelude::*;
-use rayon::prelude::*;
-use rustc_hash::FxHashMap as HashMap;
 use rustitude::{amplitude::Manager, gluex::KMatrixF0, prelude::*};
-use uuid::Uuid;
 
 fn kmatrix_benchmark(c: &mut Criterion) {
     let mut rng = rand::thread_rng();

@@ -2,8 +2,9 @@ use std::{f64::consts::PI, fmt::Display};
 
 use crate::prelude::*;
 
-use nalgebra::{ComplexField, SMatrix, SVector, Vector3};
+use nalgebra::{ComplexField, SMatrix, SVector};
 use num_complex::Complex64;
+use rayon::prelude::*;
 use sphrs::SHEval;
 use sphrs::{ComplexSH, Coordinates};
 
@@ -55,29 +56,40 @@ impl Display for Wave {
     }
 }
 
-pub struct Ylm(pub Wave);
+pub struct Ylm(Wave, Vec<Complex64>);
+impl Ylm {
+    pub fn new(wave: Wave) -> Self {
+        Self(wave, Vec::default())
+    }
+}
 impl Node for Ylm {
-    fn precalculate(&self, event: &Event) -> Vec<f64> {
-        let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
-        let p1 = event.daughter_p4s[0];
-        let recoil_res = event.recoil_p4.boost_along(&resonance);
-        let p1_res = p1.boost_along(&resonance);
-        let z = -1.0 * recoil_res.momentum().normalize();
-        let y = event
-            .beam_p4
-            .momentum()
-            .cross(&(-1.0 * event.recoil_p4.momentum()));
-        let x = y.cross(&z);
-        let p1_vec = p1_res.momentum();
-        let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
-        let ylm = ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p);
-        vec![ylm.re, ylm.im]
-    }
-    fn calculate(&self, parameters: &[f64], _event: &Event, aux_data: &[f64]) -> Complex64 {
-        Complex64::new(aux_data[0], aux_data[1]) * Complex64::new(parameters[0], parameters[1])
-    }
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["Re".to_string(), "Im".to_string()])
+    }
+
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.1 = dataset
+            .par_iter()
+            .map(|event| {
+                let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
+                let p1 = event.daughter_p4s[0];
+                let recoil_res = event.recoil_p4.boost_along(&resonance);
+                let p1_res = p1.boost_along(&resonance);
+                let z = -1.0 * recoil_res.momentum().normalize();
+                let y = event
+                    .beam_p4
+                    .momentum()
+                    .cross(&(-1.0 * event.recoil_p4.momentum()));
+                let x = y.cross(&z);
+                let p1_vec = p1_res.momentum();
+                let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+                ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p)
+            })
+            .collect();
+    }
+
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        self.1[event.index] * Complex64::new(parameters[0], parameters[1])
     }
 }
 
@@ -95,80 +107,100 @@ impl Display for Reflectivity {
     }
 }
 
-pub struct ReZlm(pub Wave, pub Reflectivity);
-impl Node for ReZlm {
-    fn precalculate(&self, event: &Event) -> Vec<f64> {
-        let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
-        let p1 = event.daughter_p4s[0];
-        let recoil_res = event.recoil_p4.boost_along(&resonance);
-        let p1_res = p1.boost_along(&resonance);
-        let z = -1.0 * recoil_res.momentum().normalize();
-        let y = event
-            .beam_p4
-            .momentum()
-            .cross(&(-1.0 * event.recoil_p4.momentum()));
-        let x = y.cross(&z);
-        let p1_vec = p1_res.momentum();
-        let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
-        let ylm = ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p);
-        let big_phi = y.dot(&event.eps).atan2(
-            event
-                .beam_p4
-                .momentum()
-                .normalize()
-                .dot(&event.eps.cross(&y)),
-        );
-        let pgamma = event.eps.norm();
-
-        let phase = Complex64::cis(-big_phi);
-        let zlm = ylm * phase;
-        match self.1 {
-            Reflectivity::Positive => vec![(1.0 + pgamma).sqrt() * zlm.re],
-            Reflectivity::Negative => vec![(1.0 - pgamma).sqrt() * zlm.re],
-        }
+pub struct ReZlm(pub Wave, pub Reflectivity, Vec<f64>);
+impl ReZlm {
+    pub fn new(wave: Wave, reflectivity: Reflectivity) -> Self {
+        Self(wave, reflectivity, Vec::default())
     }
-    fn calculate(&self, parameters: &[f64], _event: &Event, aux_data: &[f64]) -> Complex64 {
-        Complex64::new(aux_data[0], 0.0) * Complex64::new(parameters[0], parameters[1])
+}
+impl Node for ReZlm {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
+                let p1 = event.daughter_p4s[0];
+                let recoil_res = event.recoil_p4.boost_along(&resonance);
+                let p1_res = p1.boost_along(&resonance);
+                let z = -1.0 * recoil_res.momentum().normalize();
+                let y = event
+                    .beam_p4
+                    .momentum()
+                    .cross(&(-1.0 * event.recoil_p4.momentum()));
+                let x = y.cross(&z);
+                let p1_vec = p1_res.momentum();
+                let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+                let ylm = ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p);
+                let big_phi = y.dot(&event.eps).atan2(
+                    event
+                        .beam_p4
+                        .momentum()
+                        .normalize()
+                        .dot(&event.eps.cross(&y)),
+                );
+                let pgamma = event.eps.norm();
+
+                let phase = Complex64::cis(-big_phi);
+                let zlm = ylm * phase;
+                match self.1 {
+                    Reflectivity::Positive => (1.0 + pgamma).sqrt() * zlm.re,
+                    Reflectivity::Negative => (1.0 - pgamma).sqrt() * zlm.re,
+                }
+            })
+            .collect()
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        self.2[event.index] * Complex64::new(parameters[0], parameters[1])
     }
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["Re".to_string(), "Im".to_string()])
     }
 }
 
-pub struct ImZlm(pub Wave, pub Reflectivity);
-impl Node for ImZlm {
-    fn precalculate(&self, event: &Event) -> Vec<f64> {
-        let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
-        let p1 = event.daughter_p4s[0];
-        let recoil_res = event.recoil_p4.boost_along(&resonance);
-        let p1_res = p1.boost_along(&resonance);
-        let z = -1.0 * recoil_res.momentum().normalize();
-        let y = event
-            .beam_p4
-            .momentum()
-            .cross(&(-1.0 * event.recoil_p4.momentum()));
-        let x = y.cross(&z);
-        let p1_vec = p1_res.momentum();
-        let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
-        let ylm = ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p);
-        let big_phi = y.dot(&event.eps).atan2(
-            event
-                .beam_p4
-                .momentum()
-                .normalize()
-                .dot(&event.eps.cross(&y)),
-        );
-        let pgamma = event.eps.norm();
-
-        let phase = Complex64::cis(-big_phi);
-        let zlm = ylm * phase;
-        match self.1 {
-            Reflectivity::Positive => vec![(1.0 - pgamma).sqrt() * zlm.im],
-            Reflectivity::Negative => vec![(1.0 + pgamma).sqrt() * zlm.im],
-        }
+pub struct ImZlm(pub Wave, pub Reflectivity, Vec<f64>);
+impl ImZlm {
+    pub fn new(wave: Wave, reflectivity: Reflectivity) -> Self {
+        Self(wave, reflectivity, Vec::default())
     }
-    fn calculate(&self, parameters: &[f64], _event: &Event, aux_data: &[f64]) -> Complex64 {
-        Complex64::new(aux_data[0], 0.0) * Complex64::new(parameters[0], parameters[1])
+}
+impl Node for ImZlm {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
+                let p1 = event.daughter_p4s[0];
+                let recoil_res = event.recoil_p4.boost_along(&resonance);
+                let p1_res = p1.boost_along(&resonance);
+                let z = -1.0 * recoil_res.momentum().normalize();
+                let y = event
+                    .beam_p4
+                    .momentum()
+                    .cross(&(-1.0 * event.recoil_p4.momentum()));
+                let x = y.cross(&z);
+                let p1_vec = p1_res.momentum();
+                let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+                let ylm = ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p);
+                let big_phi = y.dot(&event.eps).atan2(
+                    event
+                        .beam_p4
+                        .momentum()
+                        .normalize()
+                        .dot(&event.eps.cross(&y)),
+                );
+                let pgamma = event.eps.norm();
+
+                let phase = Complex64::cis(-big_phi);
+                let zlm = ylm * phase;
+                match self.1 {
+                    Reflectivity::Positive => (1.0 - pgamma).sqrt() * zlm.im,
+                    Reflectivity::Negative => (1.0 + pgamma).sqrt() * zlm.im,
+                }
+            })
+            .collect()
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        self.2[event.index] * Complex64::new(parameters[0], parameters[1])
     }
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["Re".to_string(), "Im".to_string()])
@@ -317,7 +349,10 @@ impl<const C: usize, const R: usize> KMatrixConstants<C, R> {
         ikc_inv_vec.dot(&Self::p_vector(betas, pvector_constants_mat))
     }
 }
-pub struct KMatrixF0(KMatrixConstants<5, 5>);
+pub struct KMatrixF0(
+    KMatrixConstants<5, 5>,
+    Vec<(SVector<Complex64, 5>, SMatrix<Complex64, 5, 5>)>,
+);
 #[rustfmt::skip]
 impl Default for KMatrixF0 {
     fn default() -> Self {
@@ -344,20 +379,25 @@ impl Default for KMatrixF0 {
                 s_norm: 1.0,
             }),
             l: 0,
-        })
+        }, Vec::default())
     }
 }
 
 impl Node for KMatrixF0 {
-    fn precalculate(&self, event: &Event) -> Vec<f64> {
-        let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
-        let barrier_mat = self.0.barrier_matrix(s);
-        let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
-            barrier_mat[(i, a)] * self.0.g[(i, a)] / (self.0.mrs[a].powi(2) - s)
-        });
-        KMatrixConstants::<5, 5>::precalc_data_to_aux_data(self.0.ikc_inv(s, 2), pvector_constants)
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.1 = dataset
+            .par_iter()
+            .map(|event| {
+                let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
+                let barrier_mat = self.0.barrier_matrix(s);
+                let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
+                    barrier_mat[(i, a)] * self.0.g[(i, a)] / (self.0.mrs[a].powi(2) - s)
+                });
+                (self.0.ikc_inv(s, 2), pvector_constants)
+            })
+            .collect();
     }
-    fn calculate(&self, parameters: &[f64], _event: &Event, aux_data: &[f64]) -> Complex64 {
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
         let betas = SVector::<Complex64, 5>::new(
             Complex64::new(parameters[0], parameters[1]),
             Complex64::new(parameters[2], parameters[3]),
@@ -365,8 +405,7 @@ impl Node for KMatrixF0 {
             Complex64::new(parameters[6], parameters[7]),
             Complex64::new(parameters[8], parameters[9]),
         );
-        let (ikc_inv_vec, pvector_constants_mat) =
-            KMatrixConstants::<5, 5>::aux_data_to_precalc_data(aux_data);
+        let (ikc_inv_vec, pvector_constants_mat) = self.1[event.index];
         KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
     }
     fn parameters(&self) -> Option<Vec<String>> {

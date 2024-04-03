@@ -7,10 +7,11 @@ use parquet::{
 };
 use rayon::prelude::*;
 
-use crate::prelude::{Amplitude, FourMomentum};
+use crate::prelude::FourMomentum;
 
 #[derive(Debug, Default)]
 pub struct Event {
+    pub index: usize,
     pub weight: f64,
     pub beam_p4: FourMomentum,
     pub recoil_p4: FourMomentum,
@@ -20,6 +21,7 @@ pub struct Event {
 
 impl Display for Event {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Index: {}", self.index)?;
         writeln!(f, "Weight: {}", self.weight)?;
         writeln!(f, "Beam P4: {}", self.beam_p4)?;
         writeln!(f, "Recoil P4: {}", self.recoil_p4)?;
@@ -36,8 +38,11 @@ impl Display for Event {
     }
 }
 impl Event {
-    fn read(row: Row, polarized: bool) -> Self {
-        let mut event = Event::default();
+    fn read(index: usize, row: Row, polarized: bool) -> Self {
+        let mut event = Event {
+            index,
+            ..Default::default()
+        };
         let mut e_fs: Vec<f64> = Vec::new();
         let mut px_fs: Vec<f64> = Vec::new();
         let mut py_fs: Vec<f64> = Vec::new();
@@ -148,6 +153,10 @@ impl Dataset {
         Dataset { events }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.events.is_empty()
+    }
+
     pub fn len(&self) -> usize {
         self.events.len()
     }
@@ -175,7 +184,8 @@ impl Dataset {
         let row_iter = reader.get_row_iter(None).unwrap();
         Dataset::new(
             row_iter
-                .map(|row| Event::read(row.unwrap(), polarized))
+                .enumerate()
+                .map(|(i, row)| Event::read(i, row.unwrap(), polarized))
                 .collect(),
         )
     }

@@ -1,4 +1,3 @@
-use rayon::prelude::*;
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use num_complex::Complex64;
@@ -6,22 +5,18 @@ use num_complex::Complex64;
 use crate::{dataset::Event, prelude::Dataset};
 
 pub trait Node: Sync + Send {
-    fn precalculate(&self, event: &Event) -> Vec<f64>;
-    fn calculate(&self, parameters: &[f64], event: &Event, aux_data: &[f64]) -> Complex64;
+    fn precalculate(&mut self, dataset: &Dataset);
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64;
     fn parameters(&self) -> Option<Vec<String>>;
 }
 
 pub struct Amplitude {
     name: String,
     node: Box<dyn Node>,
-    aux_data: Vec<Vec<f64>>,
 }
 impl Debug for Amplitude {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "{}", self.name)?;
-        if self.aux_data.len() >= 5 {
-            writeln!(f, "{:?}", &self.aux_data[0..5])?;
-        }
         Ok(())
     }
 }
@@ -30,63 +25,51 @@ impl Amplitude {
         Self {
             name: name.to_string(),
             node: Box::new(node),
-            aux_data: Vec::default(),
         }
     }
     pub fn scalar(name: &str) -> Self {
         Self {
             name: name.to_string(),
             node: Box::new(Scalar),
-            aux_data: Vec::default(),
         }
     }
     pub fn cscalar(name: &str) -> Self {
         Self {
             name: name.to_string(),
             node: Box::new(ComplexScalar),
-            aux_data: Vec::default(),
         }
     }
     pub fn precompute(&mut self, dataset: &Dataset) {
-        self.aux_data = dataset
-            .par_iter()
-            .map(|event| self.node.precalculate(event))
-            .collect();
+        self.node.precalculate(dataset);
     }
-    pub fn compute(&self, parameters: &Vec<f64>, index: usize, dataset: &Dataset) -> Complex64 {
-        if self.aux_data.is_empty() {
-            self.node
-                .calculate(parameters, &dataset.events[index], &vec![])
-        } else {
-            self.node
-                .calculate(parameters, &dataset.events[index], &self.aux_data[index])
-        }
+    pub fn compute(&self, parameters: &[f64], index: usize, dataset: &Dataset) -> Complex64 {
+        self.node.calculate(parameters, &dataset.events[index])
     }
 }
 
 pub struct Scalar;
 impl Node for Scalar {
-    fn precalculate(&self, _event: &Event) -> Vec<f64> {
-        Vec::default()
-    }
-    fn calculate(&self, parameters: &[f64], _event: &Event, _aux_data: &[f64]) -> Complex64 {
-        parameters[0].into()
-    }
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["value".to_string()])
+    }
+
+    fn precalculate(&mut self, _dataset: &Dataset) {}
+
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
+        Complex64::new(parameters[0], 0.0)
     }
 }
 pub struct ComplexScalar;
 impl Node for ComplexScalar {
-    fn precalculate(&self, _event: &Event) -> Vec<f64> {
-        Vec::default()
-    }
-    fn calculate(&self, parameters: &[f64], _event: &Event, _aux_data: &[f64]) -> Complex64 {
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
         Complex64::new(parameters[0], parameters[1])
     }
+
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["real".to_string(), "imag".to_string()])
     }
+
+    fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
 pub struct Parameter(String, f64);
@@ -159,11 +142,11 @@ impl<'d> Manager<'d> {
                         term.iter()
                             .zip(term_parameters)
                             .map(|(arcnode, arcnode_parameters)| {
-                                let amp_parameters = &arcnode_parameters
+                                let amp_parameters: Vec<_> = arcnode_parameters
                                     .iter()
                                     .map(|param| parameters[param.1])
                                     .collect();
-                                arcnode.compute(amp_parameters, index, dataset)
+                                arcnode.compute(&amp_parameters, index, dataset)
                             })
                             .product::<Complex64>()
                     })
