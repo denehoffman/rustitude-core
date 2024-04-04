@@ -36,6 +36,9 @@ anyinput = "0.1.6"
 uuid = { version = "1.7.0", features = ["v4"] }
 parquet = "50.0.0"
 rand = "0.8.5"
+ordered_hash_map = "0.4.0"
+indexmap = "2.2.6"
+gomez = "0.5.0"
 
 [features]
 simd = []

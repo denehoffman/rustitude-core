@@ -143,7 +143,7 @@ impl Event {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Dataset {
     pub events: Vec<Event>,
 }

@@ -64,7 +64,7 @@ impl Ylm {
 }
 impl Node for Ylm {
     fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["Re".to_string(), "Im".to_string()])
+        None
     }
 
     fn precalculate(&mut self, dataset: &Dataset) {
@@ -88,8 +88,8 @@ impl Node for Ylm {
             .collect();
     }
 
-    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
-        self.1[event.index] * Complex64::new(parameters[0], parameters[1])
+    fn calculate(&self, _parameters: &[f64], event: &Event) -> Complex64 {
+        self.1[event.index]
     }
 }
 
@@ -149,11 +149,11 @@ impl Node for ReZlm {
             })
             .collect()
     }
-    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
-        self.2[event.index] * Complex64::new(parameters[0], parameters[1])
+    fn calculate(&self, _parameters: &[f64], event: &Event) -> Complex64 {
+        self.2[event.index].into()
     }
     fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["Re".to_string(), "Im".to_string()])
+        None
     }
 }
 
@@ -199,11 +199,11 @@ impl Node for ImZlm {
             })
             .collect()
     }
-    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
-        self.2[event.index] * Complex64::new(parameters[0], parameters[1])
+    fn calculate(&self, _parameters: &[f64], event: &Event) -> Complex64 {
+        self.2[event.index].into()
     }
     fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["Re".to_string(), "Im".to_string()])
+        None
     }
 }
 
