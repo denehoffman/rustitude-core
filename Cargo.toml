@@ -1,12 +1,10 @@
 [workspace]
 resolver = "2"
-
 members = ["crates/*"]
 
-
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-debug = false
-strip = true
+# [profile.release]
+# lto = true
+# codegen-units = 1
+# panic = "abort"
+# debug = false
+# strip = true
