@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use rustitude::{
-    amplitude::Manager,
+    amplitude::{ExtendedLogLikelihood, Manager},
     gluex::{ImZlm, KMatrixF0},
 };
 use rustitude::{
@@ -12,7 +12,8 @@ use rustitude::{
 };
 
 fn main() {
-    let ds = Dataset::from_parquet("data_pol.parquet", true);
+    let ds_data = Dataset::from_parquet("data_pol.parquet", true);
+    let ds_accmc = Dataset::from_parquet("accmc_pol.parquet", true);
     let rezlm_s0p = amplitude!(
         "Name: Re[Zlm(S0+)]",
         ReZlm::new(Wave::S0, Reflectivity::Positive)
@@ -39,50 +40,30 @@ fn main() {
     );
     let kmatrix_f0 = amplitude!("Name: F0 K-Matrix", KMatrixF0::default());
 
-    let mut m = Manager::new(&ds);
-    m.register("Sum: PosRe", "Group: S0+", &rezlm_s0p);
-    m.register("Sum: PosIm", "Group: S0+", &imzlm_s0p);
-    m.register("Sum: NegRe", "Group: S0-", &rezlm_s0n);
-    m.register("Sum: NegIm", "Group: S0-", &imzlm_s0n);
-    m.register("Sum: PosRe", "Group: D2+", &rezlm_d2p);
-    m.register("Sum: PosIm", "Group: D2+", &imzlm_d2p);
-    m.register("Sum: PosRe", "Group: S0+", &kmatrix_f0);
-    m.register("Sum: PosIm", "Group: S0+", &kmatrix_f0);
-    m.precompute();
-    m.constrain_amplitude(
-        ("Sum: PosRe", "Group: S0+", "Name: Re[Zlm(S0+)]"),
-        ("Sum: PosIm", "Group: S0+", "Name: Im[Zlm(S0+)]"),
-    );
-    m.constrain_amplitude(
-        ("Sum: NegRe", "Group: S0-", "Name: Re[Zlm(S0-)]"),
-        ("Sum: NegIm", "Group: S0-", "Name: Im[Zlm(S0-)]"),
-    );
-    m.constrain_amplitude(
-        ("Sum: PosRe", "Group: D2+", "Name: Re[Zlm(D2+)]"),
-        ("Sum: PosIm", "Group: D2+", "Name: Im[Zlm(D2+)]"),
-    );
-    m.constrain_amplitude(
-        ("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix"),
-        ("Sum: PosIm", "Group: S0+", "Name: F0 K-Matrix"),
-    );
-    m.fix(
+    let mut ell = ExtendedLogLikelihood::new(vec![&ds_data, &ds_accmc]);
+    ell.manager.register("Sum: PosRe", "Group: S0+", &rezlm_s0p);
+    ell.manager.register("Sum: PosIm", "Group: S0+", &imzlm_s0p);
+    ell.manager.register("Sum: NegRe", "Group: S0-", &rezlm_s0n);
+    ell.manager.register("Sum: NegIm", "Group: S0-", &imzlm_s0n);
+    ell.manager.register("Sum: PosRe", "Group: D2+", &rezlm_d2p);
+    ell.manager.register("Sum: PosIm", "Group: D2+", &imzlm_d2p);
+    ell.manager
+        .register("Sum: PosRe", "Group: S0+", &kmatrix_f0);
+    ell.manager
+        .register("Sum: PosIm", "Group: S0+", &kmatrix_f0);
+    ell.manager.fix(
         ("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix", "f0_500 re"),
         0.0,
     );
-    m.fix(
+    ell.manager.fix(
         ("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix", "f0_500 im"),
         0.0,
     );
-    m.fix(
+    ell.manager.fix(
         ("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix", "f0_980 im"),
         0.0,
     );
-    m.free(("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix", "f0_980 im"));
-    m.fix(
-        ("Sum: PosRe", "Group: S0+", "Name: F0 K-Matrix", "f0_980 im"),
-        0.0,
-    );
-    let mut optimizer = OptimizerDriver::builder(&m)
+    let mut optimizer = OptimizerDriver::builder(&ell)
         .with_initial(vec![1.0; 7])
         .build();
     let (x, fx) = optimizer

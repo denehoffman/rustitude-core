@@ -2,6 +2,7 @@ use std::{
     cmp::Ordering,
     fmt::Debug,
     sync::{Arc, RwLock},
+    time::Instant,
 };
 
 use gomez::Function;
@@ -16,6 +17,20 @@ use indexmap::IndexMap as OHashMap;
 macro_rules! amplitude {
     ($name:expr, $node:expr) => {{
         Arc::new(RwLock::new(Amplitude::new($name, $node)))
+    }};
+}
+
+#[macro_export]
+macro_rules! scalar {
+    ($name:expr) => {{
+        Arc::new(RwLock::new(Amplitude::scalar($name)))
+    }};
+}
+
+#[macro_export]
+macro_rules! cscalar {
+    ($name:expr) => {{
+        Arc::new(RwLock::new(Amplitude::cscalar($name)))
     }};
 }
 
@@ -36,6 +51,23 @@ impl Debug for Amplitude {
     }
 }
 impl Amplitude {
+    /// Creates an Amplitude from a Node.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use rustitude::prelude::*;
+    /// use num_complex::Complex64;
+    /// struct A;
+    /// impl Node for A {
+    ///     fn precalculate(&mut self, dataset: &Dataset) {}
+    ///     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
+    ///     fn parameters(&self) -> Option<Vec<String>> {None}
+    /// }
+    ///
+    /// assert_eq!(Amplitude::new("A", A).name, "A");
+    /// assert_eq!(Amplitude::new("A", A).node, A);
+    /// ```
     pub fn new<N: Node + 'static>(name: &str, node: N) -> Self {
         Self {
             name: name.to_string(),
@@ -200,12 +232,47 @@ impl<'d> Manager<'d> {
             .map(|(_, index)| *index)
             .expect(&format!("Could not find {}", parameter_name))
     }
+    fn get_amplitudetype(
+        &self,
+        sum_name: &str,
+        group_name: &str,
+        amplitude_name: &str,
+    ) -> &AmplitudeType {
+        self.sums
+            .get(sum_name)
+            .expect(&format!("Could not find {}", sum_name))
+            .get(group_name)
+            .expect(&format!("Could not find {}", group_name))
+            .iter()
+            .find(|amplitude_type| {
+                amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
+            })
+            .expect(&format!("Could not find {}", amplitude_name))
+    }
+    fn get_amplitudetype_mut(
+        &mut self,
+        sum_name: &str,
+        group_name: &str,
+        amplitude_name: &str,
+    ) -> &mut AmplitudeType {
+        self.sums
+            .get_mut(sum_name)
+            .expect(&format!("Could not find {}", sum_name))
+            .get_mut(group_name)
+            .expect(&format!("Could not find {}", group_name))
+            .iter_mut()
+            .find(|amplitude_type| {
+                amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
+            })
+            .expect(&format!("Could not find {}", amplitude_name))
+    }
     pub fn register(
         &mut self,
         sum_name: &str,
         group_name: &str,
         amplitude: &Arc<RwLock<Amplitude>>,
     ) {
+        amplitude.write().unwrap().precompute(self.data);
         let amp_name = amplitude.read().unwrap().name.clone();
         self.sums
             .entry(sum_name.to_string())
@@ -268,6 +335,16 @@ impl<'d> Manager<'d> {
                 sum_map
             });
     }
+    pub fn activate(&mut self, amplitude: (&str, &str, &str)) {
+        let (sum_name, group_name, amplitude_name) = amplitude;
+        self.get_amplitudetype_mut(sum_name, group_name, amplitude_name)
+            .activate();
+    }
+    pub fn deactivate(&mut self, amplitude: (&str, &str, &str)) {
+        let (sum_name, group_name, amplitude_name) = amplitude;
+        self.get_amplitudetype_mut(sum_name, group_name, amplitude_name)
+            .deactivate();
+    }
     pub fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let partype = self.get_parametertype(sum_name, group_name, amplitude_name, parameter_name);
@@ -299,6 +376,15 @@ impl<'d> Manager<'d> {
         });
         self.fixed_variable_count -= 1;
         self.variable_count += 1;
+    }
+    fn apply_to_amplitudes(&mut self, closure: impl Fn(&mut AmplitudeType)) {
+        for (_, sum) in self.sums.iter_mut() {
+            for (_, group) in sum.iter_mut() {
+                for amplitudetype in group.iter_mut() {
+                    closure(amplitudetype)
+                }
+            }
+        }
     }
     fn apply_to_parameters(&mut self, closure: impl Fn(&mut ParameterType)) {
         for (_, sum) in self.pars.iter_mut() {
@@ -403,11 +489,15 @@ impl<'d> Manager<'d> {
                                         ParameterType::Fixed(_, val) => val,
                                     })
                                     .collect();
-                                amplitude_type
-                                    .get_amplitude()
-                                    .read()
-                                    .unwrap()
-                                    .compute(&amp_parameters, event)
+                                if amplitude_type.is_activated() {
+                                    amplitude_type
+                                        .get_amplitude()
+                                        .read()
+                                        .unwrap()
+                                        .compute(&amp_parameters, event)
+                                } else {
+                                    0.0.into()
+                                }
                             })
                             .product::<Complex64>()
                     })
@@ -441,5 +531,117 @@ impl<'d> Function for Manager<'d> {
         Sx: nalgebra::Storage<Self::Field, nalgebra::Dyn> + nalgebra::IsContiguous,
     {
         self.compute(parameters.as_slice()).iter().sum()
+    }
+}
+
+pub struct MultiManager<'a> {
+    managers: Vec<Manager<'a>>,
+}
+
+impl<'a> MultiManager<'a> {
+    pub fn new(datasets: Vec<&'a Dataset>) -> Self {
+        Self {
+            managers: datasets.iter().map(|ds| Manager::new(ds)).collect(),
+        }
+    }
+    pub fn register(
+        &mut self,
+        sum_name: &str,
+        group_name: &str,
+        amplitude: &Arc<RwLock<Amplitude>>,
+    ) {
+        self.managers.iter_mut().for_each(|manager| {
+            let amp = (*amplitude).clone(); // TODO: This doesn't actually work.
+            manager.register(sum_name, group_name, &amp);
+        });
+    }
+    pub fn activate(&mut self, amplitude: (&str, &str, &str)) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.activate(amplitude);
+        });
+    }
+    pub fn deactivate(&mut self, amplitude: (&str, &str, &str)) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.deactivate(amplitude);
+        });
+    }
+    pub fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.fix(parameter, value);
+        });
+    }
+    pub fn free(&mut self, parameter: (&str, &str, &str, &str)) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.free(parameter);
+        });
+    }
+    pub fn constrain(
+        &mut self,
+        parameter_1: (&str, &str, &str, &str),
+        parameter_2: (&str, &str, &str, &str),
+    ) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.constrain(parameter_1, parameter_2);
+        });
+    }
+    pub fn constrain_amplitude(
+        &mut self,
+        group_1: (&str, &str, &str),
+        group_2: (&str, &str, &str),
+    ) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.constrain_amplitude(group_1, group_2);
+        });
+    }
+    pub fn precompute(&mut self) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.precompute();
+        });
+    }
+}
+
+pub struct ExtendedLogLikelihood<'a> {
+    pub manager: MultiManager<'a>,
+}
+impl<'a> ExtendedLogLikelihood<'a> {
+    pub fn new(datasets: Vec<&'a Dataset>) -> Self {
+        Self {
+            manager: MultiManager::new(datasets),
+        }
+    }
+    pub fn compute(&self, parameters: &[f64]) -> f64 {
+        let now = Instant::now();
+        let data_result: f64 = self.manager.managers[0]
+            .compute(parameters)
+            .iter()
+            .map(|res| res.ln())
+            .sum();
+        let mc_result: f64 = self.manager.managers[1].compute(parameters).iter().sum();
+        let n_data = self.manager.managers[0].data.len() as f64;
+        let n_mc = self.manager.managers[1].data.len() as f64;
+        println!("{:?}", now.elapsed());
+        let res = data_result - (n_data / n_mc) * mc_result;
+        println!("{res}");
+        res
+    }
+}
+
+impl<'d> Problem for ExtendedLogLikelihood<'d> {
+    type Field = f64;
+
+    fn domain(&self) -> gomez::Domain<Self::Field> {
+        gomez::Domain::unconstrained(self.manager.managers[0].variable_count)
+    }
+}
+
+impl<'d> Function for ExtendedLogLikelihood<'d> {
+    fn apply<Sx>(
+        &self,
+        parameters: &nalgebra::Vector<Self::Field, nalgebra::Dyn, Sx>,
+    ) -> Self::Field
+    where
+        Sx: nalgebra::Storage<Self::Field, nalgebra::Dyn> + nalgebra::IsContiguous,
+    {
+        self.compute(parameters.as_slice())
     }
 }
