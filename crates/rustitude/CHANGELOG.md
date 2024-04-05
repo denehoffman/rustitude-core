@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 4 commits contributed to the release.
+ - 5 commits contributed to the release.
  - 0 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Adjusting changelogs prior to release of rustitude v0.3.0 ([`0d12f1b`](https://github.com/denehoffman/rustitude/commit/0d12f1ba923d7c3c6da44e6299af0d0e3f8f7486))
     - Preliminary changelog ([`6a9e174`](https://github.com/denehoffman/rustitude/commit/6a9e17470623fe33c6ca1e297f9e5f41ccb86a61))
     - Merge pull request #4 from denehoffman/the_everything_is_a_vector_rewrite ([`c47ba17`](https://github.com/denehoffman/rustitude/commit/c47ba171fd517f9c08e0d6f52b5b2b4cec583cc5))
     - Get rid of benchmarks for now, move mds ([`7526439`](https://github.com/denehoffman/rustitude/commit/7526439994bed98a457aa67fbd223ecf93e95b26))
