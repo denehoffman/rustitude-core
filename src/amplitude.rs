@@ -41,8 +41,8 @@ pub trait Node: Sync + Send {
 }
 
 pub struct Amplitude {
-    name: String,
-    node: Box<dyn Node>,
+    pub name: String,
+    pub node: Box<dyn Node>,
 }
 impl Debug for Amplitude {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -65,8 +65,7 @@ impl Amplitude {
     ///     fn parameters(&self) -> Option<Vec<String>> {None}
     /// }
     ///
-    /// assert_eq!(Amplitude::new("A", A).name, "A");
-    /// assert_eq!(Amplitude::new("A", A).node, A);
+    /// assert_eq!(dbg!(Amplitude::new("A", A).name), "A".to_string());
     /// ```
     pub fn new<N: Node + 'static>(name: &str, node: N) -> Self {
         Self {
