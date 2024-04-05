@@ -23,7 +23,7 @@ command = [
     "--color",
     "always",
     "--",
-    "-Wclippy::pedantic",
+    # "-Wclippy::pedantic",
     "-Aclippy::similar-names",
     "-Aclippy::must-use-candidate",
     "-Aclippy::return-self-not-must-use",
@@ -45,6 +45,7 @@ command = [
     "-F",
     "intel-mkl-static",
     "--",
+    "--nocapture",
     "--color",
     "always",           # see https://github.com/Canop/bacon/issues/124
 ]

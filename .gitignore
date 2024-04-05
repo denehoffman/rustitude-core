@@ -3,3 +3,4 @@
 *.parquet
 perf*
 *.svg
+ca*.out.*
