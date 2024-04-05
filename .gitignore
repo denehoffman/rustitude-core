@@ -4,4 +4,3 @@
 perf*
 *.svg
 ca*.out.*
-benches/
