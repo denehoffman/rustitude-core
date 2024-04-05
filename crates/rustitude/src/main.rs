@@ -3,7 +3,7 @@ use std::sync::Arc;
 use std::sync::RwLock;
 
 use rustitude::{
-    amplitude::{ExtendedLogLikelihood, Manager},
+    amplitude::ExtendedLogLikelihood,
     gluex::{ImZlm, KMatrixF0},
 };
 use rustitude::{
@@ -38,9 +38,9 @@ fn main() {
         "Name: Im[Zlm(D2+)]",
         ImZlm::new(Wave::D2, Reflectivity::Positive)
     );
-    let kmatrix_f0 = amplitude!("Name: F0 K-Matrix", KMatrixF0::default());
+    let kmatrix_f0 = amplitude!("Name: F0 K-Matrix", KMatrixF0::new(2));
 
-    let mut ell = ExtendedLogLikelihood::new(vec![&ds_data, &ds_accmc]);
+    let mut ell = ExtendedLogLikelihood::new(&ds_data, &ds_accmc);
     ell.manager.register("Sum: PosRe", "Group: S0+", &rezlm_s0p);
     ell.manager.register("Sum: PosIm", "Group: S0+", &imzlm_s0p);
     ell.manager.register("Sum: NegRe", "Group: S0-", &rezlm_s0n);

@@ -603,9 +603,9 @@ pub struct ExtendedLogLikelihood<'a> {
     pub manager: MultiManager<'a>,
 }
 impl<'a> ExtendedLogLikelihood<'a> {
-    pub fn new(datasets: Vec<&'a Dataset>) -> Self {
+    pub fn new(data: &'a Dataset, monte_carlo: &'a Dataset) -> Self {
         Self {
-            manager: MultiManager::new(datasets),
+            manager: MultiManager::new(vec![data, monte_carlo]),
         }
     }
     pub fn compute(&self, parameters: &[f64]) -> f64 {

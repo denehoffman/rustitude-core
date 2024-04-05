@@ -83,7 +83,7 @@ fn zlm_benchmark(c: &mut Criterion) {
 fn kmatrix_benchmark(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
     let ds = Dataset::from_parquet("data_pol.parquet", false);
-    let kmatrix_f0 = amplitude!("KMatrix[F0]", KMatrixF0::default());
+    let kmatrix_f0 = amplitude!("KMatrix[F0]", KMatrixF0::new(2));
     let mut m = Manager::new(&ds);
     m.register("sum", "F0", &kmatrix_f0);
     m.precompute();
@@ -98,7 +98,7 @@ fn kmatrix_benchmark(c: &mut Criterion) {
 fn kmatrix_benchmark_mc(c: &mut Criterion) {
     let mut rng = rand::thread_rng();
     let ds = Dataset::from_parquet("accmc_pol.parquet", false);
-    let kmatrix_f0 = amplitude!("KMatrix[F0]", KMatrixF0::default());
+    let kmatrix_f0 = amplitude!("KMatrix[F0]", KMatrixF0::new(2));
     let mut m = Manager::new(&ds);
     m.register("sum", "F0", &kmatrix_f0);
     m.precompute();

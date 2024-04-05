@@ -1,6 +1,6 @@
 use std::{f64::consts::PI, fmt::Display};
 
-use crate::prelude::*;
+use rustitude::prelude::*;
 
 use nalgebra::{ComplexField, SMatrix, SVector};
 use num_complex::Complex64;
@@ -305,42 +305,6 @@ impl<const C: usize, const R: usize> KMatrixConstants<C, R> {
         })
     }
 
-    pub fn aux_data_to_precalc_data(
-        aux_data: &[f64],
-    ) -> (SVector<Complex64, C>, SMatrix<Complex64, C, R>) {
-        let (ikc_inv_slice, pvector_constants_slice) = aux_data.split_at(2 * C);
-        let ikc_inv: SVector<Complex64, C> = SVector::from_vec(
-            ikc_inv_slice
-                .chunks(2)
-                .map(|val| Complex64::new(val[0], val[1]))
-                .collect(),
-        );
-        let pvector_constants: SMatrix<Complex64, C, R> = SMatrix::from_vec(
-            pvector_constants_slice
-                .chunks(2)
-                .map(|val| Complex64::new(val[0], val[1]))
-                .collect(),
-        );
-        (ikc_inv, pvector_constants)
-    }
-
-    pub fn precalc_data_to_aux_data(
-        ikc_inv_vec: SVector<Complex64, C>,
-        pvector_constants_mat: SMatrix<Complex64, C, R>,
-    ) -> Vec<f64> {
-        let ikc_inv: Vec<f64> = ikc_inv_vec.data.0[0]
-            .iter()
-            .flat_map(|&c| vec![c.re, c.im])
-            .collect();
-        let pvector_constants: Vec<f64> = pvector_constants_mat
-            .data
-            .0
-            .iter()
-            .flat_map(|row| row.iter().flat_map(|&c| vec![c.re, c.im]))
-            .collect();
-        ikc_inv.into_iter().chain(pvector_constants).collect()
-    }
-
     pub fn calculate_k_matrix(
         betas: &SVector<Complex64, R>,
         ikc_inv_vec: &SVector<Complex64, C>,
@@ -350,50 +314,53 @@ impl<const C: usize, const R: usize> KMatrixConstants<C, R> {
     }
 }
 pub struct KMatrixF0(
+    usize,
     KMatrixConstants<5, 5>,
     Vec<(SVector<Complex64, 5>, SMatrix<Complex64, 5, 5>)>,
 );
 #[rustfmt::skip]
-impl Default for KMatrixF0 {
-    fn default() -> Self {
-        Self(KMatrixConstants {
-            g: SMatrix::<f64, 5, 5>::new(
-                0.74987, -0.01257, 0.02736, -0.15102, 0.36103,
-                0.06401, 0.00204, 0.77413, 0.50999, 0.13112,
-                -0.23417, -0.01032, 0.72283, 0.11934, 0.36792,
-                0.0157, 0.267, 0.09214, 0.02742, -0.04025,
-                -0.14242, 0.2278, 0.15981, 0.16272, -0.17397,
-            ),
-            c: SMatrix::<f64, 5, 5>::new(
-                0.03728, 0.00000, -0.01398, -0.02203, 0.01397,
-                0.00000, 0.00000, 0.00000, 0.00000, 0.00000,
-                -0.01398, 0.00000, 0.02349, 0.03101, -0.04003,
-                -0.02203, 0.00000, 0.03101, -0.13769, -0.06722,
-                0.01397, 0.00000, -0.04003, -0.06722, -0.28401,
-            ),
-            m1s: [0.13498, 0.26995, 0.49368, 0.54786, 0.54786],
-            m2s: [0.13498, 0.26995, 0.49761, 0.54786, 0.95778],
-            mrs: [0.51461, 0.90630, 1.23089, 1.46104, 1.69611],
-            adler_zero: Some(AdlerZero {
-                s_0: 0.0091125,
-                s_norm: 1.0,
-            }),
-            l: 0,
-        }, Vec::default())
+impl KMatrixF0 {
+    pub fn new(channel: usize) -> Self {
+        Self(channel,
+             KMatrixConstants {
+                g: SMatrix::<f64, 5, 5>::new(
+                     0.74987, -0.01257, 0.02736, -0.15102,  0.36103,
+                     0.06401,  0.00204, 0.77413,  0.50999,  0.13112,
+                    -0.23417, -0.01032, 0.72283,  0.11934,  0.36792,
+                     0.01570,  0.26700, 0.09214,  0.02742, -0.04025,
+                    -0.14242,  0.22780, 0.15981,  0.16272, -0.17397,
+                ),
+                c: SMatrix::<f64, 5, 5>::new(
+                     0.03728, 0.00000, -0.01398, -0.02203,  0.01397,
+                     0.00000, 0.00000,  0.00000,  0.00000,  0.00000,
+                    -0.01398, 0.00000,  0.02349,  0.03101, -0.04003,
+                    -0.02203, 0.00000,  0.03101, -0.13769, -0.06722,
+                     0.01397, 0.00000, -0.04003, -0.06722, -0.28401,
+                ),
+                m1s: [0.13498, 0.26995, 0.49368, 0.54786, 0.54786],
+                m2s: [0.13498, 0.26995, 0.49761, 0.54786, 0.95778],
+                mrs: [0.51461, 0.90630, 1.23089, 1.46104, 1.69611],
+                adler_zero: Some(AdlerZero {
+                    s_0: 0.0091125,
+                    s_norm: 1.0,
+                }),
+                l: 0,
+            },
+            Vec::default())
     }
 }
 
 impl Node for KMatrixF0 {
     fn precalculate(&mut self, dataset: &Dataset) {
-        self.1 = dataset
+        self.2 = dataset
             .par_iter()
             .map(|event| {
                 let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
-                let barrier_mat = self.0.barrier_matrix(s);
+                let barrier_mat = self.1.barrier_matrix(s);
                 let pvector_constants = SMatrix::<Complex64, 5, 5>::from_fn(|i, a| {
-                    barrier_mat[(i, a)] * self.0.g[(i, a)] / (self.0.mrs[a].powi(2) - s)
+                    barrier_mat[(i, a)] * self.1.g[(i, a)] / (self.1.mrs[a].powi(2) - s)
                 });
-                (self.0.ikc_inv(s, 2), pvector_constants)
+                (self.1.ikc_inv(s, self.0), pvector_constants)
             })
             .collect();
     }
@@ -405,7 +372,7 @@ impl Node for KMatrixF0 {
             Complex64::new(parameters[6], parameters[7]),
             Complex64::new(parameters[8], parameters[9]),
         );
-        let (ikc_inv_vec, pvector_constants_mat) = self.1[event.index];
+        let (ikc_inv_vec, pvector_constants_mat) = self.2[event.index];
         KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
     }
     fn parameters(&self) -> Option<Vec<String>> {
@@ -423,168 +390,246 @@ impl Node for KMatrixF0 {
         ])
     }
 }
-// // #[rustfmt::skip]
-// // const F2: KMatrixConstants<4, 4> = KMatrixConstants {
-// //     g: SMatrix::<f64, 4, 4>::new(
-// //         0.40033, 0.15479, -0.089, -0.00113,
-// //         0.0182, 0.173, 0.32393, 0.15256,
-// //         -0.06709, 0.22941, -0.43133, 0.23721,
-// //         -0.49924, 0.19295, 0.27975, -0.03987,
-// //     ),
-// //     c: SMatrix::<f64, 4, 4>::new(
-// //         -0.04319, 0.00000, 0.00984, 0.01028,
-// //         0.00000, 0.00000, 0.00000, 0.00000,
-// //         0.00984, 0.00000, -0.07344, 0.05533,
-// //         0.01028, 0.00000, 0.05533, -0.05183,
-// //     ),
-// //     m1s: [0.13498, 0.26995, 0.49368, 0.54786],
-// //     m2s: [0.13498, 0.26995, 0.49761, 0.54786],
-// //     mrs: [1.15299, 1.48359, 1.72923, 1.96700],
-// //     adler_zero: None,
-// //     l: 2,
-// // };
-// //
-// // #[derive(Default)]
-// // pub struct KMatrixF2 {
-// //     data: Vec<(SVector<Complex64, 4>, SMatrix<Complex64, 4, 4>)>,
-// // }
-// // impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixF2 {
-// //     fn precalc(&mut self, dataset: &Dataset<T>) {
-// //         self.data =
-// //         dataset
-// //                 .par_iter()
-// //                 .map(|event| {
-// //                     let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-// //                     let barrier_mat = barrier_matrix(s, &F2);
-// //                     let pvector_constants = SMatrix::<Complex64, 4, 4>::from_fn(|i, a| {
-// //                         barrier_mat[(i, a)] * F2.g[(i, a)] / (F2.mrs[a].powi(2) - s)
-// //                     });
-// //                     (ikc_inv(s, &F2, 2), pvector_constants)
-// //                 })
-// //                 .collect();
-// //         }
-// //    fn calc(&self, index: usize, event: &T, parameters: &ParameterSet) -> Complex64 {
-// //         let betas = SVector::<Complex64, 4>::new(
-// //             Complex64::new(
-// //                 parameters.get("f2_1270 re"),
-// //                 parameters.get("f2_1270 im"),
-// //             ),
-// //             Complex64::new(
-// //                 parameters.get("f2_1525 re"),
-// //                 parameters.get("f2_1525 im"),
-// //             ),
-// //             Complex64::new(
-// //                 parameters.get("f2_1810 re"),
-// //                 parameters.get("f2_1810 im"),
-// //             ),
-// //             Complex64::new(
-// //                 parameters.get("f2_1950 re"),
-// //                 parameters.get("f2_1950 im"),
-// //             ),
-// //         );
-// //         calculate_k_matrix(event, &betas, &self.data[index])
-// //     }
-// // }
-// //
-// // #[rustfmt::skip]
-// // const A0: KMatrixConstants<2, 2> = KMatrixConstants {
-// //     g: SMatrix::<f64, 2, 2>::new(
-// //         0.43215, -0.28825,
-// //         0.19, 0.43372
-// //     ),
-// //     c: SMatrix::<f64, 2, 2>::new(
-// //         0.00000, 0.00000,
-// //         0.00000, 0.00000
-// //     ),
-// //     m1s: [0.13498, 0.49368],
-// //     m2s: [0.54786, 0.49761],
-// //     mrs: [0.95395, 1.26767],
-// //     adler_zero: None,
-// //     l: 0,
-// // };
-// //
-// // #[derive(Default)]
-// // pub struct KMatrixA0 {
-// //     data: Vec<(SVector<Complex64, 2>, SMatrix<Complex64, 2, 2>)>,
-// // }
-// // impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixA0 {
-// //     fn precalc(&mut self, dataset: &Dataset<T>) {
-// //         self.data =
-// //         dataset
-// //                 .par_iter()
-// //                 .map(|event| {
-// //                     let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-// //                     let barrier_mat = barrier_matrix(s, &A0);
-// //                     let pvector_constants = SMatrix::<Complex64, 2, 2>::from_fn(|i, a| {
-// //                         barrier_mat[(i, a)] * A0.g[(i, a)] / (A0.mrs[a].powi(2) - s)
-// //                     });
-// //                     (ikc_inv(s, &A0, 1), pvector_constants)
-// //                 })
-// //                 .collect();
-// //         }
-// //    fn calc(&self, index: usize, event: &T, parameters: &ParameterSet) -> Complex64 {
-// //         let betas = SVector::<Complex64, 2>::new(
-// //             Complex64::new(
-// //                 parameters.get("a0_980 re"),
-// //                 parameters.get("a0_980 im"),
-// //             ),
-// //             Complex64::new(
-// //                 parameters.get("a0_1450 re"),
-// //                 parameters.get("a0_1450 im"),
-// //             ),
-// //         );
-// //         calculate_k_matrix(event, &betas, &self.data[index])
-// //     }
-// // }
-// //
-// // #[rustfmt::skip]
-// // const A2: KMatrixConstants<3, 2> = KMatrixConstants {
-// //     g: SMatrix::<f64, 3, 2>::new(
-// //         0.30073, 0.21426, -0.09162,
-// //         0.68567, 0.12543, 0.00184),
-// //     c: SMatrix::<f64, 3, 3>::new(
-// //         -0.40184, 0.00033, -0.08707,
-// //         0.00033, -0.21416, -0.06193,
-// //         -0.08707, -0.06193, -0.17435,
-// //     ),
-// //     m1s: [0.13498, 0.49368, 0.13498],
-// //     m2s: [0.54786, 0.49761, 0.95778],
-// //     mrs: [1.30080, 1.75351],
-// //     adler_zero: None,
-// //     l: 2,
-// // };
-// //
-// // #[derive(Default)]
-// // pub struct KMatrixA2 {
-// //     data: Vec<(SVector<Complex64, 3>, SMatrix<Complex64, 3, 2>)>,
-// // }
-// //
-// // impl<T: Event + DaughterP4s + Sync> Amplitude<T> for KMatrixA2 {
-// //     fn precalc(&mut self, dataset: &Dataset<T>) {
-// //         self.data =
-// //         dataset
-// //                 .par_iter()
-// //                 .map(|event| {
-// //                     let s = (event.daughter_p4s()[0] + event.daughter_p4s()[1]).m2();
-// //                     let barrier_mat = barrier_matrix(s, &A2);
-// //                     let pvector_constants = SMatrix::<Complex64, 3, 2>::from_fn(|i, a| {
-// //                         barrier_mat[(i, a)] * A2.g[(i, a)] / (A2.mrs[a].powi(2) - s)
-// //                     });
-// //                     (ikc_inv(s, &A2, 1), pvector_constants)
-// //                 })
-// //                 .collect();
-// //         }
-// //    fn calc(&self, index: usize, event: &T, parameters: &ParameterSet) -> Complex64 {
-// //         let betas = SVector::<Complex64, 2>::new(
-// //             Complex64::new(
-// //                 parameters.get("a2_1320 re"),
-// //                 parameters.get("a2_1320 im"),
-// //             ),
-// //             Complex64::new(
-// //                 parameters.get("a2_1700 re"),
-// //                 parameters.get("a2_1700 im"),
-// //             ),
-// //         );
-// //         calculate_k_matrix(event, &betas, &self.data[index])
-// //     }
-// // }
+pub struct KMatrixF2(
+    usize,
+    KMatrixConstants<4, 4>,
+    Vec<(SVector<Complex64, 4>, SMatrix<Complex64, 4, 4>)>,
+);
+#[rustfmt::skip]
+impl KMatrixF2 {
+    pub fn new(channel: usize) -> Self {
+        Self(channel,
+             KMatrixConstants {
+                g: SMatrix::<f64, 4, 4>::new(
+                     0.40033, 0.01820, -0.06709, -0.49924,
+                     0.15479, 0.17300,  0.22941,  0.19295,
+                    -0.08900, 0.32393, -0.43133,  0.27975, 
+                    -0.00113, 0.15256,  0.23721, -0.03987,
+                ),
+                c: SMatrix::<f64, 4, 4>::new(
+                    -0.04319, 0.00000,  0.00984,  0.01028,
+                     0.00000, 0.00000,  0.00000,  0.00000,
+                     0.00984, 0.00000, -0.07344,  0.05533,
+                     0.01028, 0.00000,  0.05533, -0.05183,
+                ),
+                m1s: [0.13498, 0.26995, 0.49368, 0.54786],
+                m2s: [0.13498, 0.26995, 0.49761, 0.54786],
+                mrs: [1.15299, 1.48359, 1.72923, 1.96700],
+                adler_zero: None,
+                l: 2,
+            },
+            Vec::default())
+    }
+}
+
+impl Node for KMatrixF2 {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
+                let barrier_mat = self.1.barrier_matrix(s);
+                let pvector_constants = SMatrix::<Complex64, 4, 4>::from_fn(|i, a| {
+                    barrier_mat[(i, a)] * self.1.g[(i, a)] / (self.1.mrs[a].powi(2) - s)
+                });
+                (self.1.ikc_inv(s, self.0), pvector_constants)
+            })
+            .collect();
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        let betas = SVector::<Complex64, 4>::new(
+            Complex64::new(parameters[0], parameters[1]),
+            Complex64::new(parameters[2], parameters[3]),
+            Complex64::new(parameters[4], parameters[5]),
+            Complex64::new(parameters[6], parameters[7]),
+        );
+        let (ikc_inv_vec, pvector_constants_mat) = self.2[event.index];
+        KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
+    }
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "f2_1270 re".to_string(),
+            "f2_1270 im".to_string(),
+            "f2_1525 re".to_string(),
+            "f2_1525 im".to_string(),
+            "f2_1810 re".to_string(),
+            "f2_1810 im".to_string(),
+            "f2_1950 re".to_string(),
+            "f2_1950 im".to_string(),
+        ])
+    }
+}
+
+pub struct KMatrixA0(
+    usize,
+    KMatrixConstants<2, 2>,
+    Vec<(SVector<Complex64, 2>, SMatrix<Complex64, 2, 2>)>,
+);
+#[rustfmt::skip]
+impl KMatrixA0 {
+    pub fn new(channel: usize) -> Self {
+        Self(channel,
+             KMatrixConstants {
+                g: SMatrix::<f64, 2, 2>::new(
+                     0.43215, 0.19000,
+                    -0.28825, 0.43372
+                ),
+                c: SMatrix::<f64, 2, 2>::new(
+                    0.00000, 0.00000,
+                    0.00000, 0.00000
+                ),
+                m1s: [0.13498, 0.49368],
+                m2s: [0.54786, 0.49761],
+                mrs: [0.95395, 1.26767],
+                adler_zero: None,
+                l: 0,
+            },
+            Vec::default())
+    }
+}
+
+impl Node for KMatrixA0 {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
+                let barrier_mat = self.1.barrier_matrix(s);
+                let pvector_constants = SMatrix::<Complex64, 2, 2>::from_fn(|i, a| {
+                    barrier_mat[(i, a)] * self.1.g[(i, a)] / (self.1.mrs[a].powi(2) - s)
+                });
+                (self.1.ikc_inv(s, self.0), pvector_constants)
+            })
+            .collect();
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        let betas = SVector::<Complex64, 2>::new(
+            Complex64::new(parameters[0], parameters[1]),
+            Complex64::new(parameters[2], parameters[3]),
+        );
+        let (ikc_inv_vec, pvector_constants_mat) = self.2[event.index];
+        KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
+    }
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "a0_980 re".to_string(),
+            "a0_980 im".to_string(),
+            "a0_1450 re".to_string(),
+            "a0_1450 im".to_string(),
+        ])
+    }
+}
+
+pub struct KMatrixA2(
+    usize,
+    KMatrixConstants<3, 2>,
+    Vec<(SVector<Complex64, 3>, SMatrix<Complex64, 3, 2>)>,
+);
+#[rustfmt::skip]
+impl KMatrixA2 {
+    pub fn new(channel: usize) -> Self {
+        Self(channel,
+             KMatrixConstants {
+                g: SMatrix::<f64, 3, 2>::new(
+                     0.30073, 0.68567,
+                     0.21426, 0.12543, 
+                    -0.09162, 0.00184
+                ),
+                c: SMatrix::<f64, 3, 3>::new(
+                    -0.40184,  0.00033, -0.08707,
+                     0.00033, -0.21416, -0.06193,
+                    -0.08707, -0.06193, -0.17435,
+                ),
+                m1s: [0.13498, 0.49368, 0.13498],
+                m2s: [0.54786, 0.49761, 0.95778],
+                mrs: [1.30080, 1.75351],
+                adler_zero: None,
+                l: 2,
+            },
+            Vec::default())
+    }
+}
+
+impl Node for KMatrixA2 {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
+                let barrier_mat = self.1.barrier_matrix(s);
+                let pvector_constants = SMatrix::<Complex64, 3, 2>::from_fn(|i, a| {
+                    barrier_mat[(i, a)] * self.1.g[(i, a)] / (self.1.mrs[a].powi(2) - s)
+                });
+                (self.1.ikc_inv(s, self.0), pvector_constants)
+            })
+            .collect();
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        let betas = SVector::<Complex64, 2>::new(
+            Complex64::new(parameters[0], parameters[1]),
+            Complex64::new(parameters[2], parameters[3]),
+        );
+        let (ikc_inv_vec, pvector_constants_mat) = self.2[event.index];
+        KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
+    }
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec![
+            "a2_1320 re".to_string(),
+            "a2_1320 im".to_string(),
+            "a2_1700 re".to_string(),
+            "a2_1700 im".to_string(),
+        ])
+    }
+}
+
+pub struct KMatrixPi1(
+    usize,
+    KMatrixConstants<2, 1>,
+    Vec<(SVector<Complex64, 2>, SMatrix<Complex64, 2, 1>)>,
+);
+#[rustfmt::skip]
+impl KMatrixPi1 {
+    pub fn new(channel: usize) -> Self {
+        Self(channel,
+             KMatrixConstants {
+                g: SMatrix::<f64, 2, 1>::new(
+                    0.80564,
+                    1.04595
+                ),
+                c: SMatrix::<f64, 2, 2>::new(
+                    1.05000,  0.15163,
+                    0.15163, -0.24611,
+                ),
+                m1s: [0.13498, 0.13498],
+                m2s: [0.54786, 0.95778],
+                mrs: [1.38552],
+                adler_zero: None,
+                l: 1,
+            },
+            Vec::default())
+    }
+}
+
+impl Node for KMatrixPi1 {
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.2 = dataset
+            .par_iter()
+            .map(|event| {
+                let s = (event.daughter_p4s[0] + event.daughter_p4s[1]).m2();
+                let barrier_mat = self.1.barrier_matrix(s);
+                let pvector_constants = SMatrix::<Complex64, 2, 1>::from_fn(|i, a| {
+                    barrier_mat[(i, a)] * self.1.g[(i, a)] / (self.1.mrs[a].powi(2) - s)
+                });
+                (self.1.ikc_inv(s, self.0), pvector_constants)
+            })
+            .collect();
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        let betas = SVector::<Complex64, 1>::new(Complex64::new(parameters[0], parameters[1]));
+        let (ikc_inv_vec, pvector_constants_mat) = self.2[event.index];
+        KMatrixConstants::calculate_k_matrix(&betas, &ikc_inv_vec, &pvector_constants_mat)
+    }
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec!["pi1_1600 re".to_string(), "pi1_1600 im".to_string()])
+    }
+}
