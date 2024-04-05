@@ -41,12 +41,5 @@ gomez = "0.5.0"
 [features]
 simd = []
 
-[profile.release]
-lto = true
-codegen-units = 1
-panic = "abort"
-debug = false
-strip = true
-
 [package.metadata.docs.rs]
 rustdoc-args = ["--html-in-header", "./src/docs-header.html"]
