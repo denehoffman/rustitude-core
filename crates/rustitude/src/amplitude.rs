@@ -10,7 +10,7 @@ use gomez::Problem;
 use num_complex::Complex64;
 use rayon::prelude::*;
 
-use crate::{dataset::Event, prelude::Dataset};
+use crate::dataset::{Dataset, Event};
 use indexmap::IndexMap as OHashMap;
 
 #[macro_export]
