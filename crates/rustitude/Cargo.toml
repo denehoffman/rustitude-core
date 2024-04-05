@@ -1,7 +1,7 @@
 [package]
 exclude = ["convert", "*.root", "*.parquet", "src/main.rs"]
 name = "rustitude"
-version = "0.1.3-beta.2"
+version = "0.3.0"
 edition = "2021"
 authors = ["Nathaniel Dene Hoffman <dene@cmu.edu>"]
 description = "A library to create and operate models for particle physics amplitude analyses"
