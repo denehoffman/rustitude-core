@@ -2,6 +2,12 @@
 name = "rustitude-gluex"
 version = "0.1.0"
 edition = "2021"
+authors = ["Nathaniel Dene Hoffman <dene@cmu.edu>"]
+description = "GlueX Amplitudes for Rustitude"
+repository = "https://github.com/denehoffman/rustitude/"
+homepage = "https://github.com/denehoffman/rustitude/"
+license = "BSD-3-Clause"
+readme = "README.md"
 
 [dependencies]
 nalgebra = "0.32.5"
