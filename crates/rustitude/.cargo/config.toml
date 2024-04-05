@@ -1,3 +1,0 @@
-[build]
-rustdocflags = ["--html-in-header", "./src/docs-header.html"]
-# rustflags = ["-Ctarget-cpu=native", "-Zthreads=8"]
