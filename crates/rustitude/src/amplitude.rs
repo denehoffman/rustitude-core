@@ -221,15 +221,15 @@ impl<'d> Manager<'d> {
     ) -> ParameterType {
         self.pars
             .get(sum_name)
-            .expect(&format!("Could not find {}", sum_name))
+            .unwrap_or_else(|| panic!("Could not find {}", sum_name))
             .get(group_name)
-            .expect(&format!("Could not find {}", group_name))
+            .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .get(amplitude_name)
-            .expect(&format!("Could not find {}", amplitude_name))
+            .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
             .iter()
             .find(|(par_name, _)| *par_name == parameter_name)
             .map(|(_, index)| *index)
-            .expect(&format!("Could not find {}", parameter_name))
+            .unwrap_or_else(|| panic!("Could not find {}", parameter_name))
     }
     fn get_amplitudetype(
         &self,
@@ -239,14 +239,14 @@ impl<'d> Manager<'d> {
     ) -> &AmplitudeType {
         self.sums
             .get(sum_name)
-            .expect(&format!("Could not find {}", sum_name))
+            .unwrap_or_else(|| panic!("Could not find {}", sum_name))
             .get(group_name)
-            .expect(&format!("Could not find {}", group_name))
+            .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter()
             .find(|amplitude_type| {
                 amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
             })
-            .expect(&format!("Could not find {}", amplitude_name))
+            .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     fn get_amplitudetype_mut(
         &mut self,
@@ -256,14 +256,14 @@ impl<'d> Manager<'d> {
     ) -> &mut AmplitudeType {
         self.sums
             .get_mut(sum_name)
-            .expect(&format!("Could not find {}", sum_name))
+            .unwrap_or_else(|| panic!("Could not find {}", sum_name))
             .get_mut(group_name)
-            .expect(&format!("Could not find {}", group_name))
+            .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter_mut()
             .find(|amplitude_type| {
                 amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
             })
-            .expect(&format!("Could not find {}", amplitude_name))
+            .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     pub fn register(
         &mut self,
@@ -441,11 +441,11 @@ impl<'d> Manager<'d> {
         let parameter_names: Vec<String> = self
             .pars
             .get(sum_name_1)
-            .expect(&format!("Could not find {}", sum_name_1))
+            .unwrap_or_else(|| panic!("Could not find {}", sum_name_1))
             .get(group_name_1)
-            .expect(&format!("Could not find {}", group_name_1))
+            .unwrap_or_else(|| panic!("Could not find {}", group_name_1))
             .get(amplitude_name_1)
-            .expect(&format!("Could not find {}", amplitude_name_1))
+            .unwrap_or_else(|| panic!("Could not find {}", amplitude_name_1))
             .iter()
             .map(|parameter| parameter.0.clone())
             .collect();
