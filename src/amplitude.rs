@@ -382,6 +382,17 @@ impl Node for ComplexScalar {
     fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
+/// An enum which specifies if a given parameter is fixed or free and gives the corresponding value
+/// and input index.
+///
+/// This enum is mostly used internally by the [`Manager`] struct. It contains two types which both
+/// hold tuples with a [`usize`] as the first member. This [`usize`] corresponds to the index this
+/// parameter should be sourced from in the input vector. [`ParameterType::Fixed`] parameters will
+/// have input indices larger than the number of free parameters in the system, and parameter
+/// indices will automatically be incremented and decremented when new parameters are added, fixed,
+/// or constrained.
+///
+/// See also: [`Manager::fix`], [`Manager::free`], [`Manager::constrain`]
 #[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
 pub enum ParameterType {
     Free(usize),
@@ -389,35 +400,42 @@ pub enum ParameterType {
 }
 impl ParameterType {
     pub fn increment(&mut self) {
+        //! Increments the index by `1`.
         match self {
             Self::Free(ref mut ind) => *ind += 1,
             Self::Fixed(ref mut ind, _) => *ind += 1,
         }
     }
     pub fn decrement(&mut self) {
+        //! Decrements the index by `1`.
         match self {
             Self::Free(ref mut ind) => *ind -= 1,
             Self::Fixed(ref mut ind, _) => *ind -= 1,
         }
     }
     pub fn set_index(&mut self, index: usize) {
+        //! Sets the index to a given value.
         match self {
             Self::Free(ref mut ind) => *ind = index,
             Self::Fixed(ref mut ind, _) => *ind = index,
         }
     }
     pub fn get_index(&self) -> usize {
+        //! Getter method for the index.
         match self {
             Self::Free(ref ind) => *ind,
             Self::Fixed(ref ind, _) => *ind,
         }
     }
     pub fn fix(&mut self, index: usize, value: f64) {
+        //! Converts a [`ParameterType::Free`] to [`ParameterType::Fixed`] with a given index and
+        //! value.
         if let Self::Free(_) = self {
             *self = Self::Fixed(index, value);
         }
     }
     pub fn free(&mut self, index: usize) {
+        //! Converts a [`ParameterType::Fixed`] to [`ParameterType::Free`].
         if let Self::Fixed(_, _) = self {
             *self = Self::Free(index);
         }
