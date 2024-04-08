@@ -223,8 +223,21 @@ pub trait Node: Sync + Send {
     fn parameters(&self) -> Option<Vec<String>>;
 }
 
+/// A struct which stores a named [`Node`].
+///
+/// The [`Amplitude`] struct turns a [`Node`] trait into a concrete type and also stores a name
+/// associated with the [`Node`]. This allows us to distinguish multiple uses of the same [`Node`]
+/// in an analysis, and makes each [`Node`]'s parameters unique.
+///
+/// The common construction pattern is through the macros [`amplitude!`], [`scalar!`], and
+/// [`cscalar`] which create a [`Arc<RwLock<Amplitude>>`], an [`Arc<RwLock<Scalar>>`], and an
+/// [`Arc<RwLock<ComplexScalar>>`] respectively.
 pub struct Amplitude {
+    /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
     pub name: String,
+    /// A [`Node`] which contains all of the operations needed to compute a [`Complex64`] from an
+    /// [`Event`] in a [`Dataset`], a [`Vec<f64>`] of parameter values, and possibly some
+    /// precomputed values.
     pub node: Box<dyn Node>,
 }
 impl Debug for Amplitude {
@@ -234,44 +247,95 @@ impl Debug for Amplitude {
     }
 }
 impl Amplitude {
-    /// Creates an Amplitude from a Node.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use rustitude::prelude::*;
-    /// use num_complex::Complex64;
-    /// struct A;
-    /// impl Node for A {
-    ///     fn precalculate(&mut self, dataset: &Dataset) {}
-    ///     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
-    ///     fn parameters(&self) -> Option<Vec<String>> {None}
-    /// }
-    ///
-    /// assert_eq!(dbg!(Amplitude::new("A", A).name), "A".to_string());
-    /// ```
     pub fn new<N: Node + 'static>(name: &str, node: N) -> Self {
+        //! Creates an named [`Amplitude`] from a [`Node`].
+        //!
+        //! The [`amplitude!`] macro is probably the cleaner way of doing this, since it also wraps
+        //! this [`Amplitude`] in an [`Arc<RwLock<Amplitude>>`] container which can then be registered by
+        //! a [`Manager`].
+        //!
+        //! # Examples
+        //!
+        //! Basic usage:
+        //!
+        //! ```
+        //! use rustitude::prelude::*;
+        //! use num_complex::Complex64;
+        //! struct A;
+        //! impl Node for A {
+        //!     fn precalculate(&mut self, dataset: &Dataset) {}
+        //!     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
+        //!     fn parameters(&self) -> Option<Vec<String>> {None}
+        //! }
+        //!
+        //! assert_eq!(Amplitude::new("A", A).name, "A".to_string());
+        //! ```
         Self {
             name: name.to_string(),
             node: Box::new(node),
         }
     }
     pub fn scalar(name: &str) -> Self {
+        //! Creates a named [`Scalar`].
+        //!
+        //! This is a convenience method to generate an [`Amplitude`] which is just a single free
+        //! parameter called `value`. The macro [`scalar!`] will wrap this [`Amplitude`] in an
+        //! [`Arc<RwLock<Scalar>>`]> container which can then be registered by a [`Manager`].
+        //!
+        //! # Examples
+        //!
+        //! Basic usage:
+        //!
+        //! ```
+        //! use rustitude::prelude::*;
+        //! let my_scalar = Amplitude::scalar("MyScalar");
+        //! assert_eq!(my_scalar.node.parameters(), Some(vec!["value".to_string()]));
+        //! ```
         Self {
             name: name.to_string(),
             node: Box::new(Scalar),
         }
     }
     pub fn cscalar(name: &str) -> Self {
+        //! Creates a named [`ComplexScalar`].
+        //!
+        //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+        //! value determined by two parameters, `real` and `imag`. The macro [`cscalar!`] will
+        //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
+        //! then be registered by a [`Manager`].
+        //!
+        //! # Examples
+        //!
+        //! Basic usage:
+        //!
+        //! ```
+        //! use rustitude::prelude::*;
+        //! let my_cscalar = Amplitude::cscalar("MyComplexScalar");
+        //! assert_eq!(my_cscalar.node.parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
+        //! ```
         Self {
             name: name.to_string(),
             node: Box::new(ComplexScalar),
         }
     }
     pub fn precompute(&mut self, dataset: &Dataset) {
+        //! Precalculates the stored [`Node`].
+        //!
+        //! This method is automatically called when a new [`Amplitude`] is registered by a
+        //! [`Manager`]
+        //!
+        //! See also: [`Manager::register`], [`Node::precalculate`]
         self.node.precalculate(dataset);
     }
     pub fn compute(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        //! Calculates the stored [`Node`].
+        //!
+        //! This method is intended to be called by a [`Manager`] in the [`Manager::compute`]
+        //! method. You can also use this method to test amplitudes, since the [`Manager::compute`]
+        //! method will automatically calculate the absolute-square of the amplitude and return a
+        //! [`f64`] rather than a [`Complex64`].
+        //!
+        //! See also: [`Manager::compute`], [`Node::calculate`]
         self.node.calculate(parameters, event)
     }
 }
