@@ -13,23 +13,75 @@ use rayon::prelude::*;
 use crate::dataset::{Dataset, Event};
 use indexmap::IndexMap as OHashMap;
 
+/// Creates a wrapped [`Amplitude`] which can be registered by a [`Manager`].
+///
+/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
+/// [`Amplitude`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use rustitude::prelude::*;
+/// use num_complex::Complex64;
+/// struct A;
+/// impl Node for A {
+///     fn precalculate(&mut self, dataset: &Dataset) {}
+///     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
+///     fn parameters(&self) -> Option<Vec<String>> {None}
+/// }
+///
+/// assert_eq!(amplitude!("MyAmplitude", A).read().unwrap().compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
+/// ```
 #[macro_export]
 macro_rules! amplitude {
     ($name:expr, $node:expr) => {{
+        use std::sync::{Arc, RwLock};
         Arc::new(RwLock::new(Amplitude::new($name, $node)))
     }};
 }
 
+/// Creates a wrapped [`Scalar`] which can be registered by a [`Manager`].
+///
+/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
+/// [`Scalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use rustitude::prelude::*;
+/// use num_complex::Complex64;
+/// assert_eq!(scalar!("MyScalar").read().unwrap().compute(&[4.3], &Event::default()), Complex64::new(4.3, 0.0));
+/// ```
 #[macro_export]
 macro_rules! scalar {
     ($name:expr) => {{
+        use std::sync::{Arc, RwLock};
         Arc::new(RwLock::new(Amplitude::scalar($name)))
     }};
 }
 
+/// Creates a wrapped [`ComplexScalar`] which can be registered by a [`Manager`].
+///
+/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
+/// [`ComplexScalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use rustitude::prelude::*;
+/// use num_complex::Complex64;
+/// assert_eq!(cscalar!("MyCScalar").read().unwrap().compute(&[4.3, 6.2], &Event::default()), Complex64::new(4.3, 6.2));
+/// ```
 #[macro_export]
 macro_rules! cscalar {
     ($name:expr) => {{
+        use std::sync::{Arc, RwLock};
         Arc::new(RwLock::new(Amplitude::cscalar($name)))
     }};
 }
