@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
-#![feature(associated_type_bounds)]
 pub mod amplitude;
 pub mod dataset;
 pub mod four_momentum;
