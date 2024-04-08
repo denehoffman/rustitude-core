@@ -86,9 +86,140 @@ macro_rules! cscalar {
     }};
 }
 
+/// A trait which contains all the required methods for a functioning [`Amplitude`].
+///
+/// The [`Node`] trait represents any mathematical structure which takes in some parameters and some
+/// [`Event`] data and computes a [`Complex64`] for each [`Event`]. This is the fundamental
+/// building block of all analyses built with Rustitude. Nodes are intended to be optimized at the
+/// user level, so they should be implemented on structs which can store some precalculated data.
+///
+/// # Examples:
+///
+/// A [`Node`] for calculating spherical harmonics:
+///
+/// ```
+/// use rustitude::prelude::*;
+///
+/// use nalgebra::{SMatrix, SVector};
+/// use num_complex::Complex64;
+/// use rayon::prelude::*;
+/// use sphrs::SHEval;
+/// use sphrs::{ComplexSH, Coordinates};
+///
+/// #[derive(Clone, Copy, Default)]
+/// #[rustfmt::skip]
+/// enum Wave {
+///     #[default]
+///     S,
+///     S0,
+///     Pn1, P0, P1, P,
+///     Dn2, Dn1, D0, D1, D2, D,
+///     Fn3, Fn2, Fn1, F0, F1, F2, F3, F,
+/// }
+///
+/// #[rustfmt::skip]
+/// impl Wave {
+///     fn l(&self) -> i64 {
+///         match self {
+///             Self::S0 | Self::S => 0,
+///             Self::Pn1 | Self::P0 | Self::P1 | Self::P => 1,
+///             Self::Dn2 | Self::Dn1 | Self::D0 | Self::D1 | Self::D2 | Self::D => 2,
+///             Self::Fn3 | Self::Fn2 | Self::Fn1 | Self::F0 | Self::F1 | Self::F2 | Self::F3 | Self::F => 3,
+///         }
+///     }
+///     fn m(&self) -> i64 {
+///         match self {
+///             Self::S | Self::P | Self::D | Self::F => 0,
+///             Self::S0 | Self::P0 | Self::D0 | Self::F0 => 0,
+///             Self::Pn1 | Self::Dn1 | Self::Fn1 => -1,
+///             Self::P1 | Self::D1 | Self::F1 => 1,
+///             Self::Dn2 | Self::Fn2 => -2,
+///             Self::D2 | Self::F2 => 2,
+///             Self::Fn3 => -3,
+///             Self::F3 => 3,
+///         }
+///     }
+/// }
+///
+/// struct Ylm(Wave, Vec<Complex64>);
+/// impl Ylm {
+///     fn new(wave: Wave) -> Self {
+///         Self(wave, Vec::default())
+///     }
+/// }
+/// impl Node for Ylm {
+///     fn parameters(&self) -> Option<Vec<String>> {
+///         None
+///     }
+///
+///     fn precalculate(&mut self, dataset: &Dataset) {
+///         self.1 = dataset
+///             .par_iter()
+///             .map(|event| {
+///                 let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
+///                 let p1 = event.daughter_p4s[0];
+///                 let recoil_res = event.recoil_p4.boost_along(&resonance); // Boost to helicity frame
+///                 let p1_res = p1.boost_along(&resonance);
+///                 let z = -1.0 * recoil_res.momentum().normalize();
+///                 let y = event
+///                     .beam_p4
+///                     .momentum()
+///                     .cross(&(-1.0 * event.recoil_p4.momentum()));
+///                 let x = y.cross(&z);
+///                 let p1_vec = p1_res.momentum();
+///                 let p = Coordinates::cartesian(p1_vec.dot(&x), p1_vec.dot(&y), p1_vec.dot(&z));
+///                 ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p)
+///             })
+///             .collect();
+///     }
+///
+///     fn calculate(&self, _parameters: &[f64], event: &Event) -> Complex64 {
+///         self.1[event.index]
+///     }
+/// }
+/// ```
+///
+/// A [`Node`] which computes a single complex scalar entirely determined by input parameters:
+///
+/// ```
+/// struct ComplexScalar;
+/// impl Node for ComplexScalar {
+///     fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
+///         Complex64::new(parameters[0], parameters[1])
+///     }
+///
+///     fn parameters(&self) -> Option<Vec<String>> {
+///         Some(vec!["real".to_string(), "imag".to_string()])
+///     }
+///
+///     fn precalculate(&mut self, _dataset: &Dataset) {}
+/// }
+/// ```
 pub trait Node: Sync + Send {
+    /// A method that is run once and stores some precalculated values given a [`Dataset`] input.
+    ///
+    /// This method is intended to run expensive calculations which don't actually depend on the
+    /// parameters. For instance, to calculate a spherical harmonic, we don't actually need any
+    /// other information than what is contained in the [`Event`], so we can calculate a spherical
+    /// harmonic for every event once and then retrieve the data in the [`Node::calculate`] method.
     fn precalculate(&mut self, dataset: &Dataset);
+
+    /// A method which runs every time the amplitude is evaluated and produces a [`Complex64`].
+    ///
+    /// Because this method is run on every evaluation, it should be as lean as possible.
+    /// Additionally, you should avoid [`rayon`]'s parallel loops inside this method since we
+    /// already parallelize over the [`Dataset`]. This method expects a single [`Event`] as well as
+    /// a slice of [`f64`]s. This slice is guaranteed to have the same length and order as
+    /// specified in the [`Node::parameters`] method, or it will be empty if that method returns
+    /// [`None`].
     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64;
+
+    /// A method which specifies the number and order of parameters used by the [`Node`].
+    ///
+    /// This method tells the [`Manager`] how to assign its input [`Vec`] of parameter values to
+    /// each [`Node`]. If this method returns [`None`], it is implied that the [`Node`] takes no
+    /// parameters as input. Otherwise, the parameter names should be listed in the same order they
+    /// are expected to be given as input to the [`Node::calculate`] method.
     fn parameters(&self) -> Option<Vec<String>>;
 }
 
