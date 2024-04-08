@@ -340,6 +340,13 @@ impl Amplitude {
     }
 }
 
+/// A [`Node`] for computing a single scalar value from an input parameter.
+///
+/// This struct implements [`Node`] to generate a single new parameter called `value`.
+///
+/// # Parameters:
+///
+/// - `value`: The value of the scalar.
 pub struct Scalar;
 impl Node for Scalar {
     fn parameters(&self) -> Option<Vec<String>> {
@@ -352,6 +359,16 @@ impl Node for Scalar {
         Complex64::new(parameters[0], 0.0)
     }
 }
+
+/// A [`Node`] for computing a single complex value from two input parameters.
+///
+/// This struct implements [`Node`] to generate a complex value from two input parameters called
+/// `real` and `imag`.
+///
+/// # Parameters:
+///
+/// - `real`: The real part of the complex scalar.
+/// - `imag`: The imaginary part of the complex scalar.
 pub struct ComplexScalar;
 impl Node for ComplexScalar {
     fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
