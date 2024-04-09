@@ -10,63 +10,71 @@ use std::{
 
 use crate::prelude::{Amplitude, Dataset, Event};
 
-/// An enum which specifies if a given parameter is fixed or free and gives the corresponding value
-/// and input index.
+/// A struct which specifies if a given parameter is fixed or free and gives the corresponding value
+/// and input index as well as information about the parameter's position in sums, groups, and
+/// amplitudes.
 ///
-/// This enum is mostly used internally by the [`Manager`] struct. It contains two types which both
-/// hold tuples with a [`usize`] as the first member. This [`usize`] corresponds to the index this
-/// parameter should be sourced from in the input vector. [`ParameterType::Fixed`] parameters will
-/// have input indices larger than the number of free parameters in the system, and parameter
-/// indices will automatically be incremented and decremented when new parameters are added, fixed,
-/// or constrained.
+/// This struct is mostly used internally by the [`Manager`] struct. The index [`usize`] corresponds
+/// to the index this parameter should be sourced from in the input vector. [`Parameter`]s will have
+/// input indices larger than the number of free parameters in the system, and parameter indices
+/// will automatically be incremented and decremented when new parameters are added, fixed, or
+/// constrained.
 ///
 /// See also: [`Manager::fix`], [`Manager::free`], [`Manager::constrain`]
-#[derive(Debug, PartialEq, PartialOrd, Clone, Copy)]
-pub enum ParameterType {
-    Free(usize),
-    Fixed(usize, f64),
+#[derive(Debug, PartialEq, PartialOrd, Clone)]
+pub struct Parameter {
+    sum: String,
+    group: String,
+    amplitude: String,
+    name: String,
+    fixed: Option<f64>,
+    index: usize,
 }
-impl ParameterType {
+
+impl Parameter {
+    pub fn new(sum: &str, group: &str, amplitude: &str, name: &str, index: usize) -> Self {
+        Self {
+            sum: sum.to_string(),
+            group: group.to_string(),
+            amplitude: amplitude.to_string(),
+            name: name.to_string(),
+            index,
+            fixed: None,
+        }
+    }
     pub fn increment(&mut self) {
         //! Increments the index by `1`.
-        match self {
-            Self::Free(ref mut ind) => *ind += 1,
-            Self::Fixed(ref mut ind, _) => *ind += 1,
-        }
+        self.index += 1;
     }
     pub fn decrement(&mut self) {
         //! Decrements the index by `1`.
-        match self {
-            Self::Free(ref mut ind) => *ind -= 1,
-            Self::Fixed(ref mut ind, _) => *ind -= 1,
-        }
+        self.index -= 1;
     }
     pub fn set_index(&mut self, index: usize) {
         //! Sets the index to a given value.
-        match self {
-            Self::Free(ref mut ind) => *ind = index,
-            Self::Fixed(ref mut ind, _) => *ind = index,
-        }
+        self.index = index;
     }
     pub fn get_index(&self) -> usize {
         //! Getter method for the index.
-        match self {
-            Self::Free(ref ind) => *ind,
-            Self::Fixed(ref ind, _) => *ind,
-        }
+        self.index
     }
     pub fn fix(&mut self, index: usize, value: f64) {
-        //! Converts a [`ParameterType::Free`] to [`ParameterType::Fixed`] with a given index and
-        //! value.
-        if let Self::Free(_) = self {
-            *self = Self::Fixed(index, value);
-        }
+        //! Converts the [`Parameter`] from free to fixed with the given index and value.
+        self.fixed = Some(value);
+        self.index = index;
     }
     pub fn free(&mut self, index: usize) {
-        //! Converts a [`ParameterType::Fixed`] to [`ParameterType::Free`].
-        if let Self::Fixed(_, _) = self {
-            *self = Self::Free(index);
-        }
+        //! Converts the [`Parameter`] from fixed to free with a given index
+        self.fixed = None;
+        self.index = index;
+    }
+    pub fn is_fixed(&self) -> bool {
+        //! Checks if the [`Parameter`] is fixed.
+        self.fixed.is_some()
+    }
+    pub fn fixed(&self) -> Option<f64> {
+        //! Getter method for fixed.
+        self.fixed
     }
 }
 
@@ -119,7 +127,7 @@ impl AmplitudeType {
 }
 
 pub trait Manage {
-    fn parameters(&self) -> Vec<(String, String, String, String)>;
+    fn parameters(&self) -> Vec<Parameter>;
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>);
     fn precompute(&mut self);
     fn constrain(
@@ -148,7 +156,7 @@ type SumMap = OHashMap<String, OHashMap<String, Vec<AmplitudeType>>>;
 /// This type is organized into three nested *ordered* [`indexmap::IndexMap`]s. The outer map
 /// describes "sums" while the middle map describes "groups". The inner map maps [`Amplitude`]s to
 /// a named list of their parameters. See [`SumMap`] for more information on this.
-type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, ParameterType)>>>>;
+type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, Parameter)>>>>;
 
 /// A struct to manage a single [`Dataset`] and an arbitrary number of [`Amplitude`]s.
 ///
@@ -185,13 +193,13 @@ impl<'d> Manager<'d> {
             fixed_variable_count: 0,
         }
     }
-    fn get_parametertype(
+    fn get_parameter(
         &self,
         sum_name: &str,
         group_name: &str,
         amplitude_name: &str,
         parameter_name: &str,
-    ) -> ParameterType {
+    ) -> &Parameter {
         self.pars
             .get(sum_name)
             .unwrap_or_else(|| panic!("Could not find {}", sum_name))
@@ -201,7 +209,7 @@ impl<'d> Manager<'d> {
             .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
             .iter()
             .find(|(par_name, _)| *par_name == parameter_name)
-            .map(|(_, index)| *index)
+            .map(|(_, parameter)| parameter)
             .unwrap_or_else(|| panic!("Could not find {}", parameter_name))
     }
     fn get_amplitudetype(
@@ -247,7 +255,7 @@ impl<'d> Manager<'d> {
             }
         }
     }
-    fn apply_to_parameters(&mut self, closure: impl Fn(&mut ParameterType)) {
+    fn apply_to_parameters(&mut self, closure: impl Fn(&mut Parameter)) {
         for (_, sum) in self.pars.iter_mut() {
             for (_, group) in sum.iter_mut() {
                 for (_, amplitude) in group.iter_mut() {
@@ -272,9 +280,9 @@ impl<'d> Manager<'d> {
                             .map(|(amplitude_type, amplitude_parameters)| {
                                 let amp_parameters: Vec<_> = amplitude_parameters
                                     .iter()
-                                    .map(|param| match param.1 {
-                                        ParameterType::Free(ind) => parameters[ind],
-                                        ParameterType::Fixed(_, val) => val,
+                                    .map(|param| match param.1.fixed() {
+                                        Some(val) => val,
+                                        None => parameters[param.1.get_index()],
                                     })
                                     .collect();
                                 if amplitude_type.is_activated() {
@@ -302,23 +310,13 @@ impl<'d> Manager<'d> {
     }
 }
 impl<'d> Manage for Manager<'d> {
-    fn parameters(&self) -> Vec<(String, String, String, String)> {
-        let mut output: Vec<(String, String, String, String)> =
-            Vec::with_capacity(self.variable_count);
-        for (sum_name, sum) in self.sums.iter() {
-            for (group_name, group) in sum.iter() {
-                for amplitude in group.iter() {
-                    let amp_name = amplitude.get_amplitude().read().unwrap().name.clone();
-                    let params = amplitude.get_amplitude().read().unwrap().node.parameters();
-                    if let Some(pars) = params {
-                        for par in pars {
-                            output.push((
-                                sum_name.to_string(),
-                                group_name.to_string(),
-                                amp_name.clone(),
-                                par,
-                            ));
-                        }
+    fn parameters(&self) -> Vec<Parameter> {
+        let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
+        for (_, sum) in self.pars.iter() {
+            for (_, group) in sum.iter() {
+                for (_, amplitude) in group.iter() {
+                    for (_, parameter) in amplitude.iter() {
+                        output.push(parameter.clone());
                     }
                 }
             }
@@ -346,12 +344,18 @@ impl<'d> Manage for Manager<'d> {
                 );
                 sum_map
             });
-        let mut pars: Vec<(String, ParameterType)> = Vec::new();
+        let mut pars: Vec<(String, Parameter)> = Vec::new();
         if let Some(parameter_names) = amplitude.read().unwrap().node.parameters() {
             for parameter_name in parameter_names {
                 pars.push((
                     parameter_name.clone(),
-                    ParameterType::Free(self.variable_count),
+                    Parameter::new(
+                        sum_name,
+                        group_name,
+                        &amp_name,
+                        &parameter_name.clone(),
+                        self.variable_count,
+                    ),
                 ));
                 for (_, sum) in self.pars.iter_mut() {
                     for (_, group) in sum.iter_mut() {
@@ -401,14 +405,16 @@ impl<'d> Manage for Manager<'d> {
     }
     fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
-        let partype = self.get_parametertype(sum_name, group_name, amplitude_name, parameter_name);
-        let new_partype =
-            ParameterType::Fixed(self.variable_count + self.fixed_variable_count, value);
+        let parameter = self
+            .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
+            .clone();
+        let mut new_parameter = parameter.clone();
+        new_parameter.fix(self.variable_count + self.fixed_variable_count, value);
         self.apply_to_parameters(|other| {
-            if other.get_index() == partype.get_index() {
-                *other = new_partype;
+            if other.get_index() == parameter.get_index() {
+                *other = new_parameter.clone();
             }
-            if other.get_index() > partype.get_index() {
+            if other.get_index() > parameter.get_index() {
                 other.decrement();
             }
         });
@@ -417,17 +423,22 @@ impl<'d> Manage for Manager<'d> {
     }
     fn free(&mut self, parameter: (&str, &str, &str, &str)) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
-        let partype = self.get_parametertype(sum_name, group_name, amplitude_name, parameter_name);
-        let new_partype = ParameterType::Free(self.variable_count);
-        self.apply_to_parameters(|other| match other.get_index().cmp(&partype.get_index()) {
-            Ordering::Less => {
-                if other.get_index() >= new_partype.get_index() {
-                    other.increment();
+        let parameter = self
+            .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
+            .clone();
+        let mut new_parameter = parameter.clone();
+        new_parameter.free(self.variable_count);
+        self.apply_to_parameters(
+            |other| match other.get_index().cmp(&parameter.get_index()) {
+                Ordering::Less => {
+                    if other.get_index() >= new_parameter.get_index() {
+                        other.increment();
+                    }
                 }
-            }
-            Ordering::Equal => *other = new_partype,
-            Ordering::Greater => {}
-        });
+                Ordering::Equal => *other = new_parameter.clone(),
+                Ordering::Greater => {}
+            },
+        );
         self.fixed_variable_count -= 1;
         self.variable_count += 1;
     }
@@ -438,28 +449,30 @@ impl<'d> Manage for Manager<'d> {
     ) {
         let (sum_name_1, group_name_1, amplitude_name_1, parameter_name_1) = parameter_1;
         let (sum_name_2, group_name_2, amplitude_name_2, parameter_name_2) = parameter_2;
-        let partype_1 =
-            self.get_parametertype(sum_name_1, group_name_1, amplitude_name_1, parameter_name_1);
-        let partype_2 =
-            self.get_parametertype(sum_name_2, group_name_2, amplitude_name_2, parameter_name_2);
-        let index_1 = partype_1.get_index();
-        let index_2 = partype_2.get_index();
-        self.apply_to_parameters(|partype| {
-            let par_index = partype.get_index();
+        let parameter_1 = self
+            .get_parameter(sum_name_1, group_name_1, amplitude_name_1, parameter_name_1)
+            .clone();
+        let parameter_2 = self
+            .get_parameter(sum_name_2, group_name_2, amplitude_name_2, parameter_name_2)
+            .clone();
+        let index_1 = parameter_1.get_index();
+        let index_2 = parameter_2.get_index();
+        self.apply_to_parameters(|parameter| {
+            let par_index = parameter.get_index();
             if index_1 > index_2 {
                 if par_index == index_1 {
-                    *partype = partype_2;
+                    *parameter = parameter_2.clone();
                 }
                 if par_index > index_1 {
-                    partype.decrement();
+                    parameter.decrement();
                 }
             }
             if index_1 < index_2 {
                 if par_index == index_2 {
-                    *partype = partype_1;
+                    *parameter = parameter_1.clone();
                 }
                 if par_index > index_2 {
-                    partype.decrement();
+                    parameter.decrement();
                 }
             }
         });
@@ -534,7 +547,7 @@ impl<'a> MultiManager<'a> {
     }
 }
 impl<'a> Manage for MultiManager<'a> {
-    fn parameters(&self) -> Vec<(String, String, String, String)> {
+    fn parameters(&self) -> Vec<Parameter> {
         self.managers[0].parameters()
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
@@ -612,7 +625,7 @@ impl<'a> ExtendedLogLikelihood<'a> {
     }
 }
 impl<'a> Manage for ExtendedLogLikelihood<'a> {
-    fn parameters(&self) -> Vec<(String, String, String, String)> {
+    fn parameters(&self) -> Vec<Parameter> {
         self.manager.parameters()
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
