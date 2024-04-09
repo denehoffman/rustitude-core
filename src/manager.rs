@@ -294,7 +294,7 @@ impl<'d> Manager<'d> {
             })
             .sum()
     }
-    fn compute(&self, parameters: &[f64]) -> Vec<f64> {
+    pub fn compute(&self, parameters: &[f64]) -> Vec<f64> {
         self.data
             .par_iter()
             .map(|event| self._compute(parameters, event))
