@@ -119,7 +119,7 @@ impl AmplitudeType {
 }
 
 pub trait Manage {
-    fn parameters(&self) -> Vec<String>;
+    fn parameters(&self) -> Vec<(String, String, String, String)>;
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>);
     fn precompute(&mut self);
     fn constrain(
@@ -302,15 +302,22 @@ impl<'d> Manager<'d> {
     }
 }
 impl<'d> Manage for Manager<'d> {
-    fn parameters(&self) -> Vec<String> {
-        let mut output: Vec<String> = Vec::with_capacity(self.variable_count);
-        for (_, sum) in self.sums.iter() {
-            for (_, group) in sum.iter() {
+    fn parameters(&self) -> Vec<(String, String, String, String)> {
+        let mut output: Vec<(String, String, String, String)> =
+            Vec::with_capacity(self.variable_count);
+        for (sum_name, sum) in self.sums.iter() {
+            for (group_name, group) in sum.iter() {
                 for amplitude in group.iter() {
+                    let amp_name = amplitude.get_amplitude().read().unwrap().name.clone();
                     let params = amplitude.get_amplitude().read().unwrap().node.parameters();
                     if let Some(pars) = params {
                         for par in pars {
-                            output.push(par);
+                            output.push((
+                                sum_name.to_string(),
+                                group_name.to_string(),
+                                amp_name.clone(),
+                                par,
+                            ));
                         }
                     }
                 }
@@ -527,7 +534,7 @@ impl<'a> MultiManager<'a> {
     }
 }
 impl<'a> Manage for MultiManager<'a> {
-    fn parameters(&self) -> Vec<String> {
+    fn parameters(&self) -> Vec<(String, String, String, String)> {
         self.managers[0].parameters()
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
@@ -605,7 +612,7 @@ impl<'a> ExtendedLogLikelihood<'a> {
     }
 }
 impl<'a> Manage for ExtendedLogLikelihood<'a> {
-    fn parameters(&self) -> Vec<String> {
+    fn parameters(&self) -> Vec<(String, String, String, String)> {
         self.manager.parameters()
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
