@@ -172,6 +172,7 @@ macro_rules! cscalar {
 /// A [`Node`] which computes a single complex scalar entirely determined by input parameters:
 ///
 /// ```
+/// use rustitude::prelude::*;
 /// struct ComplexScalar;
 /// impl Node for ComplexScalar {
 ///     fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
