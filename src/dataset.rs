@@ -38,7 +38,7 @@ impl Display for Event {
     }
 }
 impl Event {
-    fn read(index: usize, row: Row, polarized: bool) -> Self {
+    pub fn read(index: usize, row: Row) -> Self {
         let mut event = Event {
             index,
             ..Default::default()
@@ -53,18 +53,119 @@ impl Event {
                     event.beam_p4.set_e(f64::from(*value));
                 }
                 ("Px_Beam", Field::Float(value)) => {
-                    if polarized {
-                        event.eps[0] = f64::from(*value);
-                    } else {
-                        event.beam_p4.set_px(f64::from(*value));
-                    }
+                    event.beam_p4.set_px(f64::from(*value));
                 }
                 ("Py_Beam", Field::Float(value)) => {
-                    if polarized {
-                        event.eps[1] = f64::from(*value);
-                    } else {
-                        event.beam_p4.set_py(f64::from(*value));
-                    }
+                    event.beam_p4.set_py(f64::from(*value));
+                }
+                ("Pz_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_pz(f64::from(*value));
+                }
+                ("Weight", Field::Float(value)) => event.weight = f64::from(*value),
+                ("EPS", Field::ListInternal(list)) => {
+                    event.eps = Vector3::from_vec(
+                        list.elements()
+                            .iter()
+                            .map(|field| {
+                                if let Field::Float(value) = field {
+                                    f64::from(*value)
+                                } else {
+                                    panic!()
+                                }
+                            })
+                            .collect(),
+                    );
+                }
+                ("E_FinalState", Field::ListInternal(list)) => {
+                    e_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Px_FinalState", Field::ListInternal(list)) => {
+                    px_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Py_FinalState", Field::ListInternal(list)) => {
+                    py_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Pz_FinalState", Field::ListInternal(list)) => {
+                    pz_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                _ => {}
+            }
+        }
+        event.recoil_p4 = FourMomentum::new(e_fs[0], px_fs[0], py_fs[0], pz_fs[0]);
+        event.daughter_p4s = e_fs[1..]
+            .iter()
+            .zip(px_fs[1..].iter())
+            .zip(py_fs[1..].iter())
+            .zip(pz_fs[1..].iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
+            .collect();
+        let final_state_p4 = event.recoil_p4 + event.daughter_p4s.iter().sum();
+        event.beam_p4 = event.beam_p4.boost_along(&final_state_p4);
+        event.recoil_p4 = event.recoil_p4.boost_along(&final_state_p4);
+        for dp4 in event.daughter_p4s.iter_mut() {
+            *dp4 = dp4.boost_along(&final_state_p4);
+        }
+        event
+    }
+    pub fn read_eps_in_beam(index: usize, row: Row) -> Self {
+        let mut event = Event {
+            index,
+            ..Default::default()
+        };
+        let mut e_fs: Vec<f64> = Vec::new();
+        let mut px_fs: Vec<f64> = Vec::new();
+        let mut py_fs: Vec<f64> = Vec::new();
+        let mut pz_fs: Vec<f64> = Vec::new();
+        for (name, field) in row.get_column_iter() {
+            match (name.as_str(), field) {
+                ("E_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_e(f64::from(*value));
+                }
+                ("Px_Beam", Field::Float(value)) => {
+                    event.eps[0] = f64::from(*value);
+                }
+                ("Py_Beam", Field::Float(value)) => {
+                    event.eps[1] = f64::from(*value);
                 }
                 ("Pz_Beam", Field::Float(value)) => {
                     event.beam_p4.set_pz(f64::from(*value));
@@ -141,6 +242,107 @@ impl Event {
         }
         event
     }
+
+    pub fn read_with_eps(index: usize, row: Row, eps: Vector3<f64>) -> Self {
+        let mut event = Event {
+            index,
+            eps,
+            ..Default::default()
+        };
+        let mut e_fs: Vec<f64> = Vec::new();
+        let mut px_fs: Vec<f64> = Vec::new();
+        let mut py_fs: Vec<f64> = Vec::new();
+        let mut pz_fs: Vec<f64> = Vec::new();
+        for (name, field) in row.get_column_iter() {
+            match (name.as_str(), field) {
+                ("E_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_e(f64::from(*value));
+                }
+                ("Px_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_px(f64::from(*value));
+                }
+                ("Py_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_py(f64::from(*value));
+                }
+                ("Pz_Beam", Field::Float(value)) => {
+                    event.beam_p4.set_pz(f64::from(*value));
+                }
+                ("Weight", Field::Float(value)) => event.weight = f64::from(*value),
+                ("E_FinalState", Field::ListInternal(list)) => {
+                    e_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Px_FinalState", Field::ListInternal(list)) => {
+                    px_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Py_FinalState", Field::ListInternal(list)) => {
+                    py_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                ("Pz_FinalState", Field::ListInternal(list)) => {
+                    pz_fs = list
+                        .elements()
+                        .iter()
+                        .map(|field| {
+                            if let Field::Float(value) = field {
+                                f64::from(*value)
+                            } else {
+                                panic!()
+                            }
+                        })
+                        .collect()
+                }
+                _ => {}
+            }
+        }
+        event.recoil_p4 = FourMomentum::new(e_fs[0], px_fs[0], py_fs[0], pz_fs[0]);
+        event.daughter_p4s = e_fs[1..]
+            .iter()
+            .zip(px_fs[1..].iter())
+            .zip(py_fs[1..].iter())
+            .zip(pz_fs[1..].iter())
+            .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
+            .collect();
+        let final_state_p4 = event.recoil_p4 + event.daughter_p4s.iter().sum();
+        event.beam_p4 = event.beam_p4.boost_along(&final_state_p4);
+        event.recoil_p4 = event.recoil_p4.boost_along(&final_state_p4);
+        for dp4 in event.daughter_p4s.iter_mut() {
+            *dp4 = dp4.boost_along(&final_state_p4);
+        }
+        event
+    }
+
+    pub fn read_unpolarized(index: usize, row: Row) -> Self {
+        Event::read_with_eps(index, row, Vector3::default())
+    }
 }
 
 #[derive(Default, Debug)]
@@ -177,7 +379,7 @@ impl Dataset {
         self.events.par_iter_mut()
     }
 
-    pub fn from_parquet(path: &str, polarized: bool) -> Dataset {
+    pub fn from_parquet(path: &str) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
         let reader = SerializedFileReader::new(file).unwrap();
@@ -185,7 +387,43 @@ impl Dataset {
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read(i, row.unwrap(), polarized))
+                .map(|(i, row)| Event::read(i, row.unwrap()))
+                .collect(),
+        )
+    }
+    pub fn from_parquet_eps_in_beam(path: &str) -> Dataset {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+        let reader = SerializedFileReader::new(file).unwrap();
+        let row_iter = reader.get_row_iter(None).unwrap();
+        Dataset::new(
+            row_iter
+                .enumerate()
+                .map(|(i, row)| Event::read_eps_in_beam(i, row.unwrap()))
+                .collect(),
+        )
+    }
+    pub fn from_parquet_with_eps(path: &str, eps: Vector3<f64>) -> Dataset {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+        let reader = SerializedFileReader::new(file).unwrap();
+        let row_iter = reader.get_row_iter(None).unwrap();
+        Dataset::new(
+            row_iter
+                .enumerate()
+                .map(|(i, row)| Event::read_with_eps(i, row.unwrap(), eps))
+                .collect(),
+        )
+    }
+    pub fn from_parquet_unpolarized(path: &str) -> Dataset {
+        let path = Path::new(path);
+        let file = File::open(path).unwrap();
+        let reader = SerializedFileReader::new(file).unwrap();
+        let row_iter = reader.get_row_iter(None).unwrap();
+        Dataset::new(
+            row_iter
+                .enumerate()
+                .map(|(i, row)| Event::read_unpolarized(i, row.unwrap()))
                 .collect(),
         )
     }
