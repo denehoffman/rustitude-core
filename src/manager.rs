@@ -5,6 +5,7 @@ use num_complex::Complex64;
 use rayon::prelude::*;
 use std::{
     cmp::Ordering,
+    fmt::Display,
     sync::{Arc, RwLock},
 };
 
@@ -29,6 +30,25 @@ pub struct Parameter {
     name: String,
     fixed: Option<f64>,
     index: usize,
+}
+
+impl Display for Parameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{} -> ({}:::{}:::{}) {} {}",
+            self.index,
+            self.sum,
+            self.group,
+            self.amplitude,
+            self.name,
+            if let Some(value) = self.fixed {
+                format!("({value})")
+            } else {
+                "".to_string()
+            }
+        )
+    }
 }
 
 impl Parameter {
