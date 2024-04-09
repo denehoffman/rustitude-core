@@ -176,12 +176,12 @@ fn main() {
 
 # TODOs
 In no particular order, here is a list of what (probably) needs to be done before I will stop making any breaking changes:
-[ ] Create convenience methods for binned fits
-[ ] Formalize parameters into their own struct for pretty-printing and ease of use
-[ ] Create alternate methods of including polarization
-[ ] Read raw ROOT files
-[ ] Add plotting methods
-[ ] A way to check if the number of parameters matches the input at compile time would be nice, not sure if it's possible though
-[ ] If the parameters are formalized, I could include upper and lower bounds somehow as well as preferred initial values or randomization
-[ ] Lots of documentation
-[ ] Lots of tests
+- [ ] Create convenience methods for binned fits
+- [ ] Formalize parameters into their own struct for pretty-printing and ease of use
+- [x] Create alternate methods of including polarization
+- [ ] Read raw ROOT files
+- [ ] Add plotting methods
+- [ ] A way to check if the number of parameters matches the input at compile time would be nice, not sure if it's possible though
+- [ ] If the parameters are formalized, I could include upper and lower bounds somehow as well as preferred initial values or randomization
+- [ ] Lots of documentation
+- [ ] Lots of tests
