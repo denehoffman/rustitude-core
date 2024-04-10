@@ -241,9 +241,7 @@ impl<'d> Manager<'d> {
             .get(group_name)
             .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter()
-            .find(|amplitude_type| {
-                amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
-            })
+            .find(|amplitude_type| amplitude_type.get_amplitude().read().name == amplitude_name)
             .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     fn get_amplitudetype_mut(
@@ -258,9 +256,7 @@ impl<'d> Manager<'d> {
             .get_mut(group_name)
             .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter_mut()
-            .find(|amplitude_type| {
-                amplitude_type.get_amplitude().read().unwrap().name == amplitude_name
-            })
+            .find(|amplitude_type| amplitude_type.get_amplitude().read().name == amplitude_name)
             .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     fn apply_to_amplitudes(&mut self, closure: impl Fn(&mut AmplitudeType)) {
@@ -306,7 +302,6 @@ impl<'d> Manager<'d> {
                                     amplitude_type
                                         .get_amplitude()
                                         .read()
-                                        .unwrap()
                                         .compute(&amp_parameters, event)
                                 } else {
                                     0.0.into()
@@ -341,8 +336,8 @@ impl<'d> Manage for Manager<'d> {
         output
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
-        amplitude.write().unwrap().precompute(self.data);
-        let amp_name = amplitude.read().unwrap().name.clone();
+        amplitude.write().precompute(self.data);
+        let amp_name = amplitude.read().name.clone();
         self.sums
             .entry(sum_name.to_string())
             .and_modify(|sum_entry| {
@@ -362,7 +357,7 @@ impl<'d> Manage for Manager<'d> {
                 sum_map
             });
         let mut pars: Vec<(String, Parameter)> = Vec::new();
-        if let Some(parameter_names) = amplitude.read().unwrap().node.parameters() {
+        if let Some(parameter_names) = amplitude.read().node.parameters() {
             for parameter_name in parameter_names {
                 pars.push((
                     parameter_name.clone(),
@@ -521,11 +516,7 @@ impl<'d> Manage for Manager<'d> {
         for (_, sum) in self.sums.iter_mut() {
             for (_, group) in sum.iter_mut() {
                 for amplitude in group.iter_mut() {
-                    amplitude
-                        .get_amplitude()
-                        .write()
-                        .unwrap()
-                        .precompute(self.data)
+                    amplitude.get_amplitude().write().precompute(self.data)
                 }
             }
         }
