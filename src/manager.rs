@@ -568,7 +568,9 @@ impl<'d> Problem for Manager<'d> {
     type Field = f64;
 
     fn domain(&self) -> gomez::Domain<Self::Field> {
-        gomez::Domain::unconstrained(self.variable_count)
+        let lower_bounds = self.parameters().iter().map(|p| p.lower_bound).collect();
+        let upper_bounds = self.parameters().iter().map(|p| p.upper_bound).collect();
+        gomez::Domain::rect(lower_bounds, upper_bounds)
     }
 }
 
@@ -723,7 +725,17 @@ impl<'d> Problem for ExtendedLogLikelihood<'d> {
     type Field = f64;
 
     fn domain(&self) -> gomez::Domain<Self::Field> {
-        gomez::Domain::unconstrained(self.manager.managers[0].variable_count)
+        let lower_bounds = self.manager.managers[0]
+            .parameters()
+            .iter()
+            .map(|p| p.lower_bound)
+            .collect();
+        let upper_bounds = self.manager.managers[0]
+            .parameters()
+            .iter()
+            .map(|p| p.upper_bound)
+            .collect();
+        gomez::Domain::rect(lower_bounds, upper_bounds)
     }
 }
 
