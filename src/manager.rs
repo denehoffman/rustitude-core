@@ -27,6 +27,9 @@ pub struct Parameter {
     name: String,
     fixed: Option<f64>,
     index: usize,
+    initial_value: f64,
+    lower_bound: f64,
+    upper_bound: f64,
 }
 
 impl Display for Parameter {
@@ -57,6 +60,9 @@ impl Parameter {
             name: name.to_string(),
             index,
             fixed: None,
+            initial_value: 0.0,
+            lower_bound: f64::NEG_INFINITY,
+            upper_bound: f64::INFINITY,
         }
     }
     pub fn increment(&mut self) {
@@ -79,11 +85,14 @@ impl Parameter {
         //! Converts the [`Parameter`] from free to fixed with the given index and value.
         self.fixed = Some(value);
         self.index = index;
+        self.initial_value = value;
     }
-    pub fn free(&mut self, index: usize) {
-        //! Converts the [`Parameter`] from fixed to free with a given index
+    pub fn free(&mut self, index: usize, initial_value: f64) {
+        //! Converts the [`Parameter`] from fixed to free with a given index and initial
+        //! value.
         self.fixed = None;
         self.index = index;
+        self.initial_value = initial_value;
     }
     pub fn is_fixed(&self) -> bool {
         //! Checks if the [`Parameter`] is fixed.
@@ -92,6 +101,13 @@ impl Parameter {
     pub fn fixed(&self) -> Option<f64> {
         //! Getter method for fixed.
         self.fixed
+    }
+    pub fn set_bounds(&mut self, lower_bound: f64, upper_bound: f64) {
+        self.lower_bound = lower_bound;
+        self.upper_bound = upper_bound;
+    }
+    pub fn set_initial(&mut self, initial_value: f64) {
+        self.initial_value = initial_value;
     }
 }
 
@@ -156,7 +172,14 @@ pub trait Manage {
     fn activate(&mut self, amplitude: (&str, &str, &str));
     fn deactivate(&mut self, amplitude: (&str, &str, &str));
     fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64);
-    fn free(&mut self, parameter: (&str, &str, &str, &str));
+    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64);
+    fn set_bounds(
+        &mut self,
+        parameter: (&str, &str, &str, &str),
+        lower_bound: f64,
+        upper_bound: f64,
+    );
+    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64);
 }
 
 /// A convenience type used to store a structure of [`Amplitude`]s.
@@ -433,13 +456,13 @@ impl<'d> Manage for Manager<'d> {
         self.fixed_variable_count += 1;
         self.variable_count -= 1;
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str)) {
+    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let parameter = self
             .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
             .clone();
         let mut new_parameter = parameter.clone();
-        new_parameter.free(self.variable_count);
+        new_parameter.free(self.variable_count, initial_value);
         self.apply_to_parameters(
             |other| match other.get_index().cmp(&parameter.get_index()) {
                 Ordering::Less => {
@@ -521,6 +544,39 @@ impl<'d> Manage for Manager<'d> {
             }
         }
     }
+
+    fn set_bounds(
+        &mut self,
+        parameter: (&str, &str, &str, &str),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
+        let parameter = self
+            .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
+            .clone();
+        let mut new_parameter = parameter.clone();
+        new_parameter.set_bounds(lower_bound, upper_bound);
+        self.apply_to_parameters(|other| {
+            if other.get_index() == parameter.get_index() {
+                *other = new_parameter.clone();
+            }
+        });
+    }
+
+    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+        let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
+        let parameter = self
+            .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
+            .clone();
+        let mut new_parameter = parameter.clone();
+        new_parameter.set_initial(initial_value);
+        self.apply_to_parameters(|other| {
+            if other.get_index() == parameter.get_index() {
+                *other = new_parameter.clone();
+            }
+        });
+    }
 }
 
 impl<'d> Problem for Manager<'d> {
@@ -579,9 +635,9 @@ impl<'a> Manage for MultiManager<'a> {
             manager.fix(parameter, value);
         });
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str)) {
+    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
         self.managers.iter_mut().for_each(|manager| {
-            manager.free(parameter);
+            manager.free(parameter, initial_value);
         });
     }
     fn constrain(
@@ -601,6 +657,23 @@ impl<'a> Manage for MultiManager<'a> {
     fn precompute(&mut self) {
         self.managers.iter_mut().for_each(|manager| {
             manager.precompute();
+        });
+    }
+
+    fn set_bounds(
+        &mut self,
+        parameter: (&str, &str, &str, &str),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.set_bounds(parameter, lower_bound, upper_bound);
+        });
+    }
+
+    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+        self.managers.iter_mut().for_each(|manager| {
+            manager.set_initial(parameter, initial_value);
         });
     }
 }
@@ -661,8 +734,21 @@ impl<'a> Manage for ExtendedLogLikelihood<'a> {
     fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
         self.manager.fix(parameter, value);
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str)) {
-        self.manager.free(parameter);
+    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+        self.manager.free(parameter, initial_value);
+    }
+
+    fn set_bounds(
+        &mut self,
+        parameter: (&str, &str, &str, &str),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        self.manager.set_bounds(parameter, lower_bound, upper_bound);
+    }
+
+    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+        self.manager.set_initial(parameter, initial_value);
     }
 }
 
