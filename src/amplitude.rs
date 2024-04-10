@@ -76,6 +76,28 @@ macro_rules! cscalar {
     }};
 }
 
+/// Creates a wrapped [`PolarComplexScalar`] which can be registered by a [`Manager`].
+///
+/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
+/// [`PolarComplexScalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
+///
+/// # Examples
+///
+/// Basic usage:
+///
+/// ```
+/// use rustitude::prelude::*;
+/// use num_complex::Complex64;
+/// assert_eq!(pcscalar!("MyPCScalar").read().unwrap().compute(&[4.3, 6.2], &Event::default()), 4.3 * Complex64::cis(6.2));
+/// ```
+#[macro_export]
+macro_rules! pcscalar {
+    ($name:expr) => {{
+        use std::sync::{Arc, RwLock};
+        Arc::new(RwLock::new(Amplitude::pcscalar($name)))
+    }};
+}
+
 /// A trait which contains all the required methods for a functioning [`Amplitude`].
 ///
 /// The [`Node`] trait represents any mathematical structure which takes in some parameters and some
@@ -309,6 +331,28 @@ impl Amplitude {
             node: Box::new(ComplexScalar),
         }
     }
+    pub fn pcscalar(name: &str) -> Self {
+        //! Creates a named [`PolarComplexScalar`].
+        //!
+        //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+        //! value determined by two parameters, `real` and `imag`. The macro [`pcscalar!`] will
+        //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
+        //! then be registered by a [`Manager`].
+        //!
+        //! # Examples
+        //!
+        //! Basic usage:
+        //!
+        //! ```
+        //! use rustitude::prelude::*;
+        //! let my_pcscalar = Amplitude::pcscalar("MyPolarComplexScalar");
+        //! assert_eq!(my_pcscalar.node.parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
+        //! ```
+        Self {
+            name: name.to_string(),
+            node: Box::new(PolarComplexScalar),
+        }
+    }
     pub fn precompute(&mut self, dataset: &Dataset) {
         //! Precalculates the stored [`Node`].
         //!
@@ -368,6 +412,28 @@ impl Node for ComplexScalar {
 
     fn parameters(&self) -> Option<Vec<String>> {
         Some(vec!["real".to_string(), "imag".to_string()])
+    }
+
+    fn precalculate(&mut self, _dataset: &Dataset) {}
+}
+
+/// A [`Node`] for computing a single complex value from two input parameters in polar form.
+///
+/// This struct implements [`Node`] to generate a complex value from two input parameters called
+/// `mag` and `phi`.
+///
+/// # Parameters:
+///
+/// - `mag`: The magnitude of the complex scalar.
+/// - `phi`: The phase of the complex scalar.
+pub struct PolarComplexScalar;
+impl Node for PolarComplexScalar {
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
+        parameters[0] * Complex64::cis(parameters[1])
+    }
+
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec!["mag".to_string(), "phi".to_string()])
     }
 
     fn precalculate(&mut self, _dataset: &Dataset) {}

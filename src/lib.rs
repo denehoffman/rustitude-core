@@ -9,6 +9,6 @@ pub mod prelude {
     pub use crate::dataset::{Dataset, Event};
     pub use crate::four_momentum::FourMomentum;
     pub use crate::manager::{ExtendedLogLikelihood, Manage, Manager, MultiManager};
-    pub use crate::{amplitude, cscalar, scalar};
+    pub use crate::{amplitude, cscalar, pcscalar, scalar};
     pub use num_complex::Complex64;
 }
