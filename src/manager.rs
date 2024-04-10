@@ -159,27 +159,21 @@ impl AmplitudeType {
     }
 }
 
+type AmplitudeID<'a> = (&'a str, &'a str, &'a str);
+type ParameterID<'a> = (&'a str, &'a str, &'a str, &'a str);
+
 pub trait Manage {
     fn parameters(&self) -> Vec<Parameter>;
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>);
     fn precompute(&mut self);
-    fn constrain(
-        &mut self,
-        parameter_1: (&str, &str, &str, &str),
-        parameter_2: (&str, &str, &str, &str),
-    );
-    fn constrain_amplitude(&mut self, group_1: (&str, &str, &str), group_2: (&str, &str, &str));
-    fn activate(&mut self, amplitude: (&str, &str, &str));
-    fn deactivate(&mut self, amplitude: (&str, &str, &str));
-    fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64);
-    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64);
-    fn set_bounds(
-        &mut self,
-        parameter: (&str, &str, &str, &str),
-        lower_bound: f64,
-        upper_bound: f64,
-    );
-    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64);
+    fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID);
+    fn constrain_amplitude(&mut self, amplitude_1: AmplitudeID, amplitude_2: AmplitudeID);
+    fn activate(&mut self, amplitude: AmplitudeID);
+    fn deactivate(&mut self, amplitude: AmplitudeID);
+    fn fix(&mut self, parameter: ParameterID, value: f64);
+    fn free(&mut self, parameter: ParameterID, initial_value: f64);
+    fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64);
+    fn set_initial(&mut self, parameter: ParameterID, initial_value: f64);
 }
 
 /// A convenience type used to store a structure of [`Amplitude`]s.
@@ -428,17 +422,17 @@ impl<'d> Manage for Manager<'d> {
                 sum_map
             });
     }
-    fn activate(&mut self, amplitude: (&str, &str, &str)) {
+    fn activate(&mut self, amplitude: AmplitudeID) {
         let (sum_name, group_name, amplitude_name) = amplitude;
         self.get_amplitudetype_mut(sum_name, group_name, amplitude_name)
             .activate();
     }
-    fn deactivate(&mut self, amplitude: (&str, &str, &str)) {
+    fn deactivate(&mut self, amplitude: AmplitudeID) {
         let (sum_name, group_name, amplitude_name) = amplitude;
         self.get_amplitudetype_mut(sum_name, group_name, amplitude_name)
             .deactivate();
     }
-    fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
+    fn fix(&mut self, parameter: ParameterID, value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let parameter = self
             .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
@@ -456,7 +450,7 @@ impl<'d> Manage for Manager<'d> {
         self.fixed_variable_count += 1;
         self.variable_count -= 1;
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn free(&mut self, parameter: ParameterID, initial_value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let parameter = self
             .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
@@ -477,11 +471,7 @@ impl<'d> Manage for Manager<'d> {
         self.fixed_variable_count -= 1;
         self.variable_count += 1;
     }
-    fn constrain(
-        &mut self,
-        parameter_1: (&str, &str, &str, &str),
-        parameter_2: (&str, &str, &str, &str),
-    ) {
+    fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID) {
         let (sum_name_1, group_name_1, amplitude_name_1, parameter_name_1) = parameter_1;
         let (sum_name_2, group_name_2, amplitude_name_2, parameter_name_2) = parameter_2;
         let parameter_1 = self
@@ -513,9 +503,9 @@ impl<'d> Manage for Manager<'d> {
         });
         self.variable_count -= 1;
     }
-    fn constrain_amplitude(&mut self, group_1: (&str, &str, &str), group_2: (&str, &str, &str)) {
-        let (sum_name_1, group_name_1, amplitude_name_1) = group_1;
-        let (sum_name_2, group_name_2, amplitude_name_2) = group_2;
+    fn constrain_amplitude(&mut self, amplitude_1: AmplitudeID, amplitude_2: AmplitudeID) {
+        let (sum_name_1, group_name_1, amplitude_name_1) = amplitude_1;
+        let (sum_name_2, group_name_2, amplitude_name_2) = amplitude_2;
         // TODO: this will fail if amplitude at 1 and 2 have different parameter names!
         let parameter_names: Vec<String> = self
             .pars
@@ -545,12 +535,7 @@ impl<'d> Manage for Manager<'d> {
         }
     }
 
-    fn set_bounds(
-        &mut self,
-        parameter: (&str, &str, &str, &str),
-        lower_bound: f64,
-        upper_bound: f64,
-    ) {
+    fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let parameter = self
             .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
@@ -564,7 +549,7 @@ impl<'d> Manage for Manager<'d> {
         });
     }
 
-    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn set_initial(&mut self, parameter: ParameterID, initial_value: f64) {
         let (sum_name, group_name, amplitude_name, parameter_name) = parameter;
         let parameter = self
             .get_parameter(sum_name, group_name, amplitude_name, parameter_name)
@@ -620,38 +605,34 @@ impl<'a> Manage for MultiManager<'a> {
             manager.register(sum_name, group_name, &amp);
         });
     }
-    fn activate(&mut self, amplitude: (&str, &str, &str)) {
+    fn activate(&mut self, amplitude: AmplitudeID) {
         self.managers.iter_mut().for_each(|manager| {
             manager.activate(amplitude);
         });
     }
-    fn deactivate(&mut self, amplitude: (&str, &str, &str)) {
+    fn deactivate(&mut self, amplitude: AmplitudeID) {
         self.managers.iter_mut().for_each(|manager| {
             manager.deactivate(amplitude);
         });
     }
-    fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
+    fn fix(&mut self, parameter: ParameterID, value: f64) {
         self.managers.iter_mut().for_each(|manager| {
             manager.fix(parameter, value);
         });
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn free(&mut self, parameter: ParameterID, initial_value: f64) {
         self.managers.iter_mut().for_each(|manager| {
             manager.free(parameter, initial_value);
         });
     }
-    fn constrain(
-        &mut self,
-        parameter_1: (&str, &str, &str, &str),
-        parameter_2: (&str, &str, &str, &str),
-    ) {
+    fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID) {
         self.managers.iter_mut().for_each(|manager| {
             manager.constrain(parameter_1, parameter_2);
         });
     }
-    fn constrain_amplitude(&mut self, group_1: (&str, &str, &str), group_2: (&str, &str, &str)) {
+    fn constrain_amplitude(&mut self, amplitude_1: AmplitudeID, amplitude_2: AmplitudeID) {
         self.managers.iter_mut().for_each(|manager| {
-            manager.constrain_amplitude(group_1, group_2);
+            manager.constrain_amplitude(amplitude_1, amplitude_2);
         });
     }
     fn precompute(&mut self) {
@@ -660,18 +641,13 @@ impl<'a> Manage for MultiManager<'a> {
         });
     }
 
-    fn set_bounds(
-        &mut self,
-        parameter: (&str, &str, &str, &str),
-        lower_bound: f64,
-        upper_bound: f64,
-    ) {
+    fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64) {
         self.managers.iter_mut().for_each(|manager| {
             manager.set_bounds(parameter, lower_bound, upper_bound);
         });
     }
 
-    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn set_initial(&mut self, parameter: ParameterID, initial_value: f64) {
         self.managers.iter_mut().for_each(|manager| {
             manager.set_initial(parameter, initial_value);
         });
@@ -715,39 +691,30 @@ impl<'a> Manage for ExtendedLogLikelihood<'a> {
     fn precompute(&mut self) {
         self.manager.precompute();
     }
-    fn constrain(
-        &mut self,
-        parameter_1: (&str, &str, &str, &str),
-        parameter_2: (&str, &str, &str, &str),
-    ) {
+    fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID) {
         self.manager.constrain(parameter_1, parameter_2);
     }
-    fn constrain_amplitude(&mut self, group_1: (&str, &str, &str), group_2: (&str, &str, &str)) {
-        self.manager.constrain_amplitude(group_1, group_2);
+    fn constrain_amplitude(&mut self, amplitude_1: AmplitudeID, amplitude_2: AmplitudeID) {
+        self.manager.constrain_amplitude(amplitude_1, amplitude_2);
     }
-    fn activate(&mut self, amplitude: (&str, &str, &str)) {
+    fn activate(&mut self, amplitude: AmplitudeID) {
         self.manager.activate(amplitude);
     }
-    fn deactivate(&mut self, amplitude: (&str, &str, &str)) {
+    fn deactivate(&mut self, amplitude: AmplitudeID) {
         self.manager.deactivate(amplitude);
     }
-    fn fix(&mut self, parameter: (&str, &str, &str, &str), value: f64) {
+    fn fix(&mut self, parameter: ParameterID, value: f64) {
         self.manager.fix(parameter, value);
     }
-    fn free(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn free(&mut self, parameter: ParameterID, initial_value: f64) {
         self.manager.free(parameter, initial_value);
     }
 
-    fn set_bounds(
-        &mut self,
-        parameter: (&str, &str, &str, &str),
-        lower_bound: f64,
-        upper_bound: f64,
-    ) {
+    fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64) {
         self.manager.set_bounds(parameter, lower_bound, upper_bound);
     }
 
-    fn set_initial(&mut self, parameter: (&str, &str, &str, &str), initial_value: f64) {
+    fn set_initial(&mut self, parameter: ParameterID, initial_value: f64) {
         self.manager.set_initial(parameter, initial_value);
     }
 }
