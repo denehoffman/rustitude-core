@@ -177,7 +177,7 @@ fn main() {
 # TODOs
 In no particular order, here is a list of what (probably) needs to be done before I will stop making any breaking changes:
 - [ ] Create convenience methods for binned fits
-- [ ] Formalize parameters into their own struct for pretty-printing and ease of use
+- [x] Formalize parameters into their own struct for pretty-printing and ease of use
 - [x] Create alternate methods of including polarization
 - [ ] Read raw ROOT files
 - [ ] Add plotting methods
