@@ -2,12 +2,9 @@ use gomez::Function;
 use gomez::Problem;
 use indexmap::IndexMap as OHashMap;
 use num_complex::Complex64;
+use parking_lot::RwLock;
 use rayon::prelude::*;
-use std::{
-    cmp::Ordering,
-    fmt::Display,
-    sync::{Arc, RwLock},
-};
+use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
 use crate::prelude::{Amplitude, Dataset, Event};
 

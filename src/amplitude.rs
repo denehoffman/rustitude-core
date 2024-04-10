@@ -27,7 +27,8 @@ use crate::dataset::{Dataset, Event};
 #[macro_export]
 macro_rules! amplitude {
     ($name:expr, $node:expr) => {{
-        use std::sync::{Arc, RwLock};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
         Arc::new(RwLock::new(Amplitude::new($name, $node)))
     }};
 }
@@ -49,7 +50,8 @@ macro_rules! amplitude {
 #[macro_export]
 macro_rules! scalar {
     ($name:expr) => {{
-        use std::sync::{Arc, RwLock};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
         Arc::new(RwLock::new(Amplitude::scalar($name)))
     }};
 }
@@ -71,7 +73,8 @@ macro_rules! scalar {
 #[macro_export]
 macro_rules! cscalar {
     ($name:expr) => {{
-        use std::sync::{Arc, RwLock};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
         Arc::new(RwLock::new(Amplitude::cscalar($name)))
     }};
 }
@@ -93,7 +96,8 @@ macro_rules! cscalar {
 #[macro_export]
 macro_rules! pcscalar {
     ($name:expr) => {{
-        use std::sync::{Arc, RwLock};
+        use parking_lot::RwLock;
+        use std::sync::Arc;
         Arc::new(RwLock::new(Amplitude::pcscalar($name)))
     }};
 }
