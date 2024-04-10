@@ -22,7 +22,7 @@ use crate::dataset::{Dataset, Event};
 ///     fn parameters(&self) -> Option<Vec<String>> {None}
 /// }
 ///
-/// assert_eq!(amplitude!("MyAmplitude", A).read().unwrap().compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
+/// assert_eq!(amplitude!("MyAmplitude", A).read().compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
 /// ```
 #[macro_export]
 macro_rules! amplitude {
@@ -45,7 +45,7 @@ macro_rules! amplitude {
 /// ```
 /// use rustitude::prelude::*;
 /// use num_complex::Complex64;
-/// assert_eq!(scalar!("MyScalar").read().unwrap().compute(&[4.3], &Event::default()), Complex64::new(4.3, 0.0));
+/// assert_eq!(scalar!("MyScalar").read().compute(&[4.3], &Event::default()), Complex64::new(4.3, 0.0));
 /// ```
 #[macro_export]
 macro_rules! scalar {
@@ -68,7 +68,7 @@ macro_rules! scalar {
 /// ```
 /// use rustitude::prelude::*;
 /// use num_complex::Complex64;
-/// assert_eq!(cscalar!("MyCScalar").read().unwrap().compute(&[4.3, 6.2], &Event::default()), Complex64::new(4.3, 6.2));
+/// assert_eq!(cscalar!("MyCScalar").read().compute(&[4.3, 6.2], &Event::default()), Complex64::new(4.3, 6.2));
 /// ```
 #[macro_export]
 macro_rules! cscalar {
@@ -91,7 +91,7 @@ macro_rules! cscalar {
 /// ```
 /// use rustitude::prelude::*;
 /// use num_complex::Complex64;
-/// assert_eq!(pcscalar!("MyPCScalar").read().unwrap().compute(&[4.3, 6.2], &Event::default()), 4.3 * Complex64::cis(6.2));
+/// assert_eq!(pcscalar!("MyPCScalar").read().compute(&[4.3, 6.2], &Event::default()), 4.3 * Complex64::cis(6.2));
 /// ```
 #[macro_export]
 macro_rules! pcscalar {
