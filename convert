@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """
-Convert ROOT file to Parquet.
+Convert ROOT file to a Rustitude-compatible format.
 
 Usage:
-  convert <root_file_path> [--output <output_path>] [--tree=<tree_name>]
+  convert <root_file_path> [--output <output_path>] [--tree=<tree_name>] [--parquet]
   convert -h | --help
 
 Options:
   -h --help              Show this help message and exit.
-  --output <output_path> Specify the output path for the Parquet file.
+  --output <output_path> Specify the output path for the file.
+  --parquet              Output to .parquet instead of .root
   --tree=<tree_name>     Specify the name of the TTree in the ROOT file.
 """
 
@@ -19,6 +20,15 @@ from docopt import docopt
 
 
 def convert(root_file_path, output_parquet_path=None, tree_name=None):
+    with uproot.open(root_file_path) as root_file:
+        tree_name = root_file.keys()[0] if tree_name is None else tree_name
+
+        tree = root_file[tree_name]
+        out_file = uproot.recreate(root_file_path.replace(".root", "_rust.root"))
+        out_file[tree_name] = tree.arrays(library="np")
+
+
+def convert_parquet(root_file_path, output_parquet_path=None, tree_name=None):
     with uproot.open(root_file_path) as root_file:
         tree_name = root_file.keys()[0] if tree_name is None else tree_name
 
@@ -37,7 +47,9 @@ def convert(root_file_path, output_parquet_path=None, tree_name=None):
 if __name__ == "__main__":
     arguments = docopt(__doc__)
     root_file_path = arguments["<root_file_path>"]
-    output_parquet_path = arguments["--output"]
+    output_path = arguments["--output"]
     tree_name = arguments["--tree"]
-
-    convert(root_file_path, output_parquet_path, tree_name)
+    if arguments["--parquet"]:
+        convert_parquet(root_file_path, output_path, tree_name)
+    else:
+        convert(root_file_path, output_path, tree_name)
