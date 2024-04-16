@@ -22,6 +22,7 @@ from docopt import docopt
 def convert(root_file_path, output_parquet_path=None, tree_name=None):
     with uproot.open(root_file_path) as root_file:
         tree_name = root_file.keys()[0] if tree_name is None else tree_name
+        tree_name = tree_name.split(";")[0]
 
         tree = root_file[tree_name]
         out_file = uproot.recreate(root_file_path.replace(".root", "_rust.root"))
@@ -31,6 +32,7 @@ def convert(root_file_path, output_parquet_path=None, tree_name=None):
 def convert_parquet(root_file_path, output_parquet_path=None, tree_name=None):
     with uproot.open(root_file_path) as root_file:
         tree_name = root_file.keys()[0] if tree_name is None else tree_name
+        tree_name = tree_name.split(";")[0]
 
         tree = root_file[tree_name]
         numpy_arrays = tree.arrays(library="np")
