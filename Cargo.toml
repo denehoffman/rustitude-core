@@ -11,6 +11,10 @@ license = "BSD-3-Clause"
 readme = "README.md"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "rustitude"
+crate-type = ["cdylib"]
+
 [dependencies]
 rayon = { version = "1.8.0" }
 approx = { version = "0.5.1", features = ["num-complex"] }
@@ -41,6 +45,10 @@ parking_lot = "0.12.1"
 fastrand = "2.0.2"
 oxyroot = "0.1.18"
 itertools = "0.12.1"
+
+[dependencies.pyo3]
+version = "0.21.2"
+features = ["abi3-py37"]
 
 [features]
 simd = []

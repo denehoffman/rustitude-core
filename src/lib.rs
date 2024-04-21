@@ -12,3 +12,15 @@ pub mod prelude {
     pub use crate::{amplitude, cscalar, pcscalar, scalar};
     pub use num_complex::Complex64;
 }
+use pyo3::prelude::*;
+
+#[pyfunction]
+fn testing() {
+    println!("Testing!");
+}
+
+#[pymodule]
+fn rustitude(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_function(wrap_pyfunction!(testing, m)?)?;
+    Ok(())
+}

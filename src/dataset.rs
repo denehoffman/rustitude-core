@@ -1,9 +1,10 @@
-use std::{fmt::Display, fs::File, path::Path};
+use std::{fmt::Display, fs::File, path::Path, sync::Arc};
 
 use itertools::izip;
 use nalgebra::Vector3;
 use num::Zero;
 use oxyroot::{RootFile, Slice};
+use parking_lot::RwLock;
 use parquet::{
     file::reader::{FileReader, SerializedFileReader},
     record::{Field, Row},
@@ -348,43 +349,29 @@ impl Event {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Dataset {
-    pub events: Vec<Event>,
+    pub events: Arc<RwLock<Vec<Event>>>,
 }
 
 impl Dataset {
     pub fn new(events: Vec<Event>) -> Self {
-        Dataset { events }
+        Dataset {
+            events: Arc::new(RwLock::new(events)),
+        }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.events.is_empty()
+        self.events.read().is_empty()
     }
 
     pub fn len(&self) -> usize {
-        self.events.len()
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<'_, Event> {
-        self.events.iter()
-    }
-
-    pub fn iter_mut(&mut self) -> std::slice::IterMut<'_, Event> {
-        self.events.iter_mut()
-    }
-
-    pub fn par_iter(&self) -> rayon::slice::Iter<'_, Event> {
-        self.events.par_iter()
-    }
-
-    pub fn par_iter_mut(&mut self) -> rayon::slice::IterMut<'_, Event> {
-        self.events.par_iter_mut()
+        self.events.read().len()
     }
 
     pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
         let (mut selected, mut rejected): (Vec<_>, Vec<_>) =
-            self.events.par_drain(..).partition(query);
+            self.events.write().par_drain(..).partition(query);
         selected
             .par_iter_mut()
             .enumerate()
@@ -393,7 +380,7 @@ impl Dataset {
             .par_iter_mut()
             .enumerate()
             .for_each(|(i, event)| event.index = i);
-        self.events = selected;
+        self.events = Arc::new(RwLock::new(selected));
         Dataset::new(rejected)
     }
 

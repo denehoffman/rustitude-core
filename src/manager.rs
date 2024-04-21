@@ -217,16 +217,16 @@ type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, Pa
 /// where $`\overrightarrow{p}`$ is a vector of parameters and $`e`$ represents the data from an
 /// [`Event`].
 #[derive(Debug)]
-pub struct Manager<'d> {
+pub struct Manager {
     pub sums: SumMap,
     pub pars: ParMap,
-    data: &'d Dataset,
+    data: Dataset,
     variable_count: usize,
     fixed_variable_count: usize,
 }
 
-impl<'d> Manager<'d> {
-    pub fn new(dataset: &'d Dataset) -> Self {
+impl Manager {
+    pub fn new(dataset: &Dataset) -> Self {
         //! Creates a new [`Manager`] from a &[`Dataset`].
         //!
         //! This is the prefered method for creating new [`Manager`]s. Because no modification ever
@@ -235,7 +235,7 @@ impl<'d> Manager<'d> {
         Self {
             sums: SumMap::default(),
             pars: ParMap::default(),
-            data: dataset,
+            data: dataset.clone(),
             variable_count: 0,
             fixed_variable_count: 0,
         }
@@ -346,12 +346,14 @@ impl<'d> Manager<'d> {
     }
     pub fn compute(&self, parameters: &[f64]) -> Vec<f64> {
         self.data
+            .events
+            .read()
             .par_iter()
             .map(|event| self._compute(parameters, event))
             .collect()
     }
 }
-impl<'d> Manage for Manager<'d> {
+impl Manage for Manager {
     fn parameters(&self) -> Vec<Parameter> {
         let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
         for (_, sum) in self.pars.iter() {
@@ -366,7 +368,7 @@ impl<'d> Manage for Manager<'d> {
         output
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
-        amplitude.write().precompute(self.data);
+        amplitude.write().precompute(&self.data);
         let amp_name = amplitude.read().name.clone();
         self.sums
             .entry(sum_name.to_string())
@@ -542,7 +544,7 @@ impl<'d> Manage for Manager<'d> {
         for (_, sum) in self.sums.iter_mut() {
             for (_, group) in sum.iter_mut() {
                 for amplitude in group.iter_mut() {
-                    amplitude.get_amplitude().write().precompute(self.data)
+                    amplitude.get_amplitude().write().precompute(&self.data)
                 }
             }
         }
@@ -577,18 +579,18 @@ impl<'d> Manage for Manager<'d> {
     }
 }
 
-pub struct MultiManager<'a> {
-    managers: Vec<Manager<'a>>,
+pub struct MultiManager {
+    managers: Vec<Manager>,
 }
 
-impl<'a> MultiManager<'a> {
-    pub fn new(datasets: Vec<&'a Dataset>) -> Self {
+impl MultiManager {
+    pub fn new(datasets: Vec<&Dataset>) -> Self {
         Self {
             managers: datasets.iter().map(|ds| Manager::new(ds)).collect(),
         }
     }
 }
-impl<'a> Manage for MultiManager<'a> {
+impl Manage for MultiManager {
     fn parameters(&self) -> Vec<Parameter> {
         self.managers[0].parameters()
     }
@@ -647,11 +649,11 @@ impl<'a> Manage for MultiManager<'a> {
     }
 }
 
-pub struct ExtendedLogLikelihood<'a> {
-    pub manager: MultiManager<'a>,
+pub struct ExtendedLogLikelihood {
+    pub manager: MultiManager,
 }
-impl<'a> ExtendedLogLikelihood<'a> {
-    pub fn new(data: &'a Dataset, monte_carlo: &'a Dataset) -> Self {
+impl ExtendedLogLikelihood {
+    pub fn new(data: &Dataset, monte_carlo: &Dataset) -> Self {
         Self {
             manager: MultiManager::new(vec![data, monte_carlo]),
         }
@@ -660,13 +662,13 @@ impl<'a> ExtendedLogLikelihood<'a> {
         let data_result: f64 = self.manager.managers[0]
             .compute(parameters)
             .iter()
-            .zip(self.manager.managers[0].data.iter())
+            .zip(self.manager.managers[0].data.events.read().iter())
             .map(|(res, e)| e.weight * res.ln())
             .sum();
         let mc_result: f64 = self.manager.managers[1]
             .compute(parameters)
             .iter()
-            .zip(self.manager.managers[1].data.iter())
+            .zip(self.manager.managers[1].data.events.read().iter())
             .map(|(res, e)| e.weight * res)
             .sum();
         let n_data = self.manager.managers[0].data.len() as f64;
@@ -674,7 +676,7 @@ impl<'a> ExtendedLogLikelihood<'a> {
         data_result - (n_data / n_mc) * mc_result
     }
 }
-impl<'a> Manage for ExtendedLogLikelihood<'a> {
+impl Manage for ExtendedLogLikelihood {
     fn parameters(&self) -> Vec<Parameter> {
         self.manager.parameters()
     }
