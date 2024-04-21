@@ -4,7 +4,10 @@ use parking_lot::RwLock;
 use rayon::prelude::*;
 use std::{cmp::Ordering, fmt::Display, sync::Arc};
 
-use crate::prelude::{Amplitude, Dataset, Event};
+use crate::{
+    fit::Function,
+    prelude::{Amplitude, Dataset, Event},
+};
 
 /// A struct which specifies if a given parameter is fixed or free and gives the corresponding value
 /// and input index as well as information about the parameter's position in sums, groups, and
@@ -166,7 +169,7 @@ impl AmplitudeType {
 type AmplitudeID<'a> = (&'a str, &'a str, &'a str);
 type ParameterID<'a> = (&'a str, &'a str, &'a str, &'a str);
 
-pub trait Manage {
+pub trait Manage: Function {
     fn parameters(&self) -> Vec<Parameter>;
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>);
     fn precompute(&mut self);
@@ -344,13 +347,20 @@ impl<'d> Manager<'d> {
             })
             .sum()
     }
-    pub fn compute(&self, parameters: &[f64]) -> Vec<f64> {
+    fn compute(&self, parameters: &[f64]) -> Vec<f64> {
         self.data
             .par_iter()
             .map(|event| self._compute(parameters, event))
             .collect()
     }
 }
+
+impl<'d> Function for Manager<'d> {
+    fn call(&self, x: &[f64]) -> f64 {
+        self.compute(x).iter().sum()
+    }
+}
+
 impl<'d> Manage for Manager<'d> {
     fn parameters(&self) -> Vec<Parameter> {
         let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
@@ -588,6 +598,13 @@ impl<'a> MultiManager<'a> {
         }
     }
 }
+
+impl<'a> Function for MultiManager<'a> {
+    fn call(&self, _x: &[f64]) -> f64 {
+        unimplemented!()
+    }
+}
+
 impl<'a> Manage for MultiManager<'a> {
     fn parameters(&self) -> Vec<Parameter> {
         self.managers[0].parameters()
@@ -656,22 +673,22 @@ impl<'a> ExtendedLogLikelihood<'a> {
             manager: MultiManager::new(vec![data, monte_carlo]),
         }
     }
-    pub fn compute(&self, parameters: &[f64]) -> f64 {
-        let data_result: f64 = self.manager.managers[0]
-            .compute(parameters)
-            .iter()
-            .zip(self.manager.managers[0].data.iter())
-            .map(|(res, e)| e.weight * res.ln())
-            .sum();
-        let mc_result: f64 = self.manager.managers[1]
-            .compute(parameters)
-            .iter()
-            .zip(self.manager.managers[1].data.iter())
-            .map(|(res, e)| e.weight * res)
-            .sum();
+    fn compute(&self, parameters: &[f64]) -> f64 {
         let n_data = self.manager.managers[0].data.len() as f64;
         let n_mc = self.manager.managers[1].data.len() as f64;
-        data_result - (n_data / n_mc) * mc_result
+        let data_result = self.manager.managers[0]
+            .compute(parameters)
+            .into_iter()
+            .zip(self.manager.managers[0].data.iter())
+            .map(|(res, e)| e.weight * res.ln())
+            .sum::<f64>();
+        let mc_result = self.manager.managers[1]
+            .compute(parameters)
+            .into_iter()
+            .zip(self.manager.managers[1].data.iter())
+            .map(|(res, e)| e.weight * res)
+            .sum::<f64>();
+        -2.0 * (data_result - (n_data / n_mc) * mc_result)
     }
 }
 impl<'a> Manage for ExtendedLogLikelihood<'a> {
