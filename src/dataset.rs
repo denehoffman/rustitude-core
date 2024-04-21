@@ -1,6 +1,9 @@
 use std::{fmt::Display, fs::File, path::Path};
 
+use itertools::izip;
 use nalgebra::Vector3;
+use num::Zero;
+use oxyroot::{RootFile, Slice};
 use parquet::{
     file::reader::{FileReader, SerializedFileReader},
     record::{Field, Row},
@@ -38,7 +41,7 @@ impl Display for Event {
     }
 }
 impl Event {
-    pub fn read(index: usize, row: Row) -> Self {
+    pub fn read_parquet_row(index: usize, row: Row) -> Self {
         let mut event = Event {
             index,
             ..Default::default()
@@ -147,7 +150,7 @@ impl Event {
         }
         event
     }
-    pub fn read_eps_in_beam(index: usize, row: Row) -> Self {
+    pub fn read_parquet_row_eps_in_beam(index: usize, row: Row) -> Self {
         let mut event = Event {
             index,
             ..Default::default()
@@ -243,7 +246,7 @@ impl Event {
         event
     }
 
-    pub fn read_with_eps(index: usize, row: Row, eps: Vector3<f64>) -> Self {
+    pub fn read_parquet_row_with_eps(index: usize, row: Row, eps: Vector3<f64>) -> Self {
         let mut event = Event {
             index,
             eps,
@@ -340,8 +343,8 @@ impl Event {
         event
     }
 
-    pub fn read_unpolarized(index: usize, row: Row) -> Self {
-        Event::read_with_eps(index, row, Vector3::default())
+    pub fn read_parquet_row_unpolarized(index: usize, row: Row) -> Self {
+        Event::read_parquet_row_with_eps(index, row, Vector3::default())
     }
 }
 
@@ -379,6 +382,47 @@ impl Dataset {
         self.events.par_iter_mut()
     }
 
+    pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
+        let (mut selected, mut rejected): (Vec<_>, Vec<_>) =
+            self.events.par_drain(..).partition(query);
+        selected
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, event)| event.index = i);
+        rejected
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, event)| event.index = i);
+        self.events = selected;
+        Dataset::new(rejected)
+    }
+
+    pub fn reject(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
+        self.select(|event| !query(event))
+    }
+
+    pub fn split(
+        mut self,
+        variable: impl Fn(&Event) -> f64 + Sync + Send,
+        range: (f64, f64),
+        nbins: usize,
+    ) -> (Vec<Dataset>, Dataset, Dataset) {
+        let mut bins: Vec<f64> = Vec::with_capacity(nbins + 1);
+        let width = (range.1 - range.0) / nbins as f64;
+        for m in 0..=nbins {
+            bins.push(range.0 + width * m as f64);
+        }
+        let mut out: Vec<Dataset> = Vec::with_capacity(nbins);
+        let underflow: Dataset = self.reject(|event: &Event| variable(event) < bins[0]);
+        let overflow: Dataset = self.reject(|event: &Event| variable(event) > bins[bins.len() - 1]);
+        // now the ends are trimmed off of self
+        bins.into_iter().skip(1).for_each(|ub| {
+            let bin_contents = self.reject(|event| variable(event) < ub);
+            out.push(bin_contents);
+        });
+        (out, underflow, overflow)
+    }
+
     pub fn from_parquet(path: &str) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
@@ -387,7 +431,7 @@ impl Dataset {
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read(i, row.unwrap()))
+                .map(|(i, row)| Event::read_parquet_row(i, row.unwrap()))
                 .collect(),
         )
     }
@@ -399,7 +443,7 @@ impl Dataset {
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read_eps_in_beam(i, row.unwrap()))
+                .map(|(i, row)| Event::read_parquet_row_eps_in_beam(i, row.unwrap()))
                 .collect(),
         )
     }
@@ -411,7 +455,7 @@ impl Dataset {
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read_with_eps(i, row.unwrap(), eps))
+                .map(|(i, row)| Event::read_parquet_row_with_eps(i, row.unwrap(), eps))
                 .collect(),
         )
     }
@@ -423,7 +467,95 @@ impl Dataset {
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read_unpolarized(i, row.unwrap()))
+                .map(|(i, row)| Event::read_parquet_row_unpolarized(i, row.unwrap()))
+                .collect(),
+        )
+    }
+    pub fn from_root(path: &str) -> Dataset {
+        let ttree = RootFile::open(path).unwrap().get_tree("kin").unwrap(); // TODO:
+        let weight: Vec<f64> = ttree
+            .branch("Weight")
+            .unwrap()
+            .as_iter::<f32>()
+            .unwrap()
+            .map(f64::from)
+            .collect();
+        let e_beam: Vec<f64> = ttree
+            .branch("E_Beam")
+            .unwrap()
+            .as_iter::<f32>()
+            .unwrap()
+            .map(f64::from)
+            .collect();
+        let px_beam: Vec<f64> = ttree
+            .branch("Px_Beam")
+            .unwrap()
+            .as_iter::<f32>()
+            .unwrap()
+            .map(f64::from)
+            .collect();
+        let py_beam: Vec<f64> = ttree
+            .branch("Py_Beam")
+            .unwrap()
+            .as_iter::<f32>()
+            .unwrap()
+            .map(f64::from)
+            .collect();
+        let pz_beam: Vec<f64> = ttree
+            .branch("Pz_Beam")
+            .unwrap()
+            .as_iter::<f32>()
+            .unwrap()
+            .map(f64::from)
+            .collect();
+        let e_fs: Vec<Vec<f64>> = ttree
+            .branch("E_FinalState")
+            .unwrap()
+            .as_iter::<Slice<f64>>()
+            .unwrap()
+            .map(|v| v.into_vec())
+            .collect();
+        let px_fs: Vec<Vec<f64>> = ttree
+            .branch("Px_FinalState")
+            .unwrap()
+            .as_iter::<Slice<f64>>()
+            .unwrap()
+            .map(|v| v.into_vec())
+            .collect();
+        let py_fs: Vec<Vec<f64>> = ttree
+            .branch("Py_FinalState")
+            .unwrap()
+            .as_iter::<Slice<f64>>()
+            .unwrap()
+            .map(|v| v.into_vec())
+            .collect();
+        let pz_fs: Vec<Vec<f64>> = ttree
+            .branch("Pz_FinalState")
+            .unwrap()
+            .as_iter::<Slice<f64>>()
+            .unwrap()
+            .map(|v| v.into_vec())
+            .collect();
+        Dataset::new(
+            izip!(weight, e_beam, px_beam, py_beam, pz_beam, e_fs, px_fs, py_fs, pz_fs)
+                .enumerate()
+                .map(
+                    |(i, (w, e_b, px_b, py_b, pz_b, e_f, px_f, py_f, pz_f))| Event {
+                        index: i,
+                        weight: w,
+                        beam_p4: FourMomentum::new(e_b, px_b, py_b, pz_b),
+                        recoil_p4: FourMomentum::new(e_f[0], px_f[0], py_f[0], pz_f[0]),
+                        daughter_p4s: izip!(
+                            e_f[1..].iter(),
+                            px_f[1..].iter(),
+                            py_f[1..].iter(),
+                            pz_f[1..].iter()
+                        )
+                        .map(|(e, px, py, pz)| FourMomentum::new(*e, *px, *py, *pz))
+                        .collect(),
+                        eps: Vector3::zero(),
+                    },
+                )
                 .collect(),
         )
     }
