@@ -109,6 +109,12 @@ impl Parameter {
     pub fn set_initial(&mut self, initial_value: f64) {
         self.initial_value = initial_value;
     }
+    pub fn get_bounds(&self) -> (f64, f64) {
+        (self.lower_bound, self.upper_bound)
+    }
+    pub fn get_initial(&self) -> f64 {
+        self.initial_value
+    }
 }
 
 /// An enum which stores an [`Amplitude`] in an activated/deactivated state.
@@ -174,6 +180,15 @@ pub trait Manage {
     fn free(&mut self, parameter: ParameterID, initial_value: f64);
     fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64);
     fn set_initial(&mut self, parameter: ParameterID, initial_value: f64);
+    fn get_lower_bounds(&self) -> Vec<f64> {
+        self.parameters().iter().map(|p| p.lower_bound).collect()
+    }
+    fn get_upper_bounds(&self) -> Vec<f64> {
+        self.parameters().iter().map(|p| p.upper_bound).collect()
+    }
+    fn get_initial_values(&self) -> Vec<f64> {
+        self.parameters().iter().map(|p| p.initial_value).collect()
+    }
 }
 
 /// A convenience type used to store a structure of [`Amplitude`]s.
