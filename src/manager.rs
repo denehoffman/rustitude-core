@@ -1,5 +1,3 @@
-use gomez::Function;
-use gomez::Problem;
 use indexmap::IndexMap as OHashMap;
 use num_complex::Complex64;
 use parking_lot::RwLock;
@@ -579,28 +577,6 @@ impl<'d> Manage for Manager<'d> {
     }
 }
 
-impl<'d> Problem for Manager<'d> {
-    type Field = f64;
-
-    fn domain(&self) -> gomez::Domain<Self::Field> {
-        let lower_bounds = self.parameters().iter().map(|p| p.lower_bound).collect();
-        let upper_bounds = self.parameters().iter().map(|p| p.upper_bound).collect();
-        gomez::Domain::rect(lower_bounds, upper_bounds)
-    }
-}
-
-impl<'d> Function for Manager<'d> {
-    fn apply<Sx>(
-        &self,
-        parameters: &nalgebra::Vector<Self::Field, nalgebra::Dyn, Sx>,
-    ) -> Self::Field
-    where
-        Sx: nalgebra::Storage<Self::Field, nalgebra::Dyn> + nalgebra::IsContiguous,
-    {
-        self.compute(parameters.as_slice()).iter().sum()
-    }
-}
-
 pub struct MultiManager<'a> {
     managers: Vec<Manager<'a>>,
 }
@@ -733,35 +709,5 @@ impl<'a> Manage for ExtendedLogLikelihood<'a> {
 
     fn set_initial(&mut self, parameter: ParameterID, initial_value: f64) {
         self.manager.set_initial(parameter, initial_value);
-    }
-}
-
-impl<'d> Problem for ExtendedLogLikelihood<'d> {
-    type Field = f64;
-
-    fn domain(&self) -> gomez::Domain<Self::Field> {
-        let lower_bounds = self.manager.managers[0]
-            .parameters()
-            .iter()
-            .map(|p| p.lower_bound)
-            .collect();
-        let upper_bounds = self.manager.managers[0]
-            .parameters()
-            .iter()
-            .map(|p| p.upper_bound)
-            .collect();
-        gomez::Domain::rect(lower_bounds, upper_bounds)
-    }
-}
-
-impl<'d> Function for ExtendedLogLikelihood<'d> {
-    fn apply<Sx>(
-        &self,
-        parameters: &nalgebra::Vector<Self::Field, nalgebra::Dyn, Sx>,
-    ) -> Self::Field
-    where
-        Sx: nalgebra::Storage<Self::Field, nalgebra::Dyn> + nalgebra::IsContiguous,
-    {
-        self.compute(parameters.as_slice())
     }
 }
