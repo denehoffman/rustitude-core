@@ -12,7 +12,7 @@ pub mod prelude {
     pub use crate::{amplitude, cscalar, pcscalar, scalar};
     pub use num_complex::Complex64;
 }
-use pyo3::prelude::*;
+use pyo3::{prelude::*, types::PyDict, wrap_pymodule};
 
 #[pyfunction]
 fn testing() {
@@ -20,7 +20,12 @@ fn testing() {
 }
 
 #[pymodule]
-fn rustitude(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn rustitude(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
+    let sys = PyModule::import_bound(py, "sys")?;
+    let sys_modules: Bound<'_, PyDict> = sys.getattr("modules")?.downcast_into()?;
+
     m.add_function(wrap_pyfunction!(testing, m)?)?;
+    m.add_wrapped(wrap_pymodule!(four_momentum::four_momentum))?;
+    sys_modules.set_item("rustitude.four_momentum", m.getattr("four_momentum")?)?;
     Ok(())
 }
