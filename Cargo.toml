@@ -38,6 +38,9 @@ ordered_hash_map = "0.4.0"
 indexmap = "2.2.6"
 gomez = "0.5.0"
 parking_lot = "0.12.1"
+fastrand = "2.0.2"
+oxyroot = "0.1.18"
+itertools = "0.12.1"
 
 [features]
 simd = []
