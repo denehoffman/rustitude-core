@@ -14,7 +14,7 @@ use crate::dataset::{Dataset, Event};
 /// Basic usage:
 ///
 /// ```
-/// use rustitude::prelude::*;
+/// use rustitude_core::prelude::*;
 /// use num_complex::Complex64;
 /// struct A;
 /// impl Node for A {
@@ -44,7 +44,7 @@ macro_rules! amplitude {
 /// A [`Node`] for calculating spherical harmonics:
 ///
 /// ```
-/// use rustitude::prelude::*;
+/// use rustitude_core::prelude::*;
 ///
 /// use nalgebra::{SMatrix, SVector};
 /// use num_complex::Complex64;
@@ -128,7 +128,7 @@ macro_rules! amplitude {
 /// A [`Node`] which computes a single complex scalar entirely determined by input parameters:
 ///
 /// ```
-/// use rustitude::prelude::*;
+/// use rustitude_core::prelude::*;
 /// struct ComplexScalar;
 /// impl Node for ComplexScalar {
 ///     fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
@@ -207,7 +207,7 @@ impl Amplitude {
         //! Basic usage:
         //!
         //! ```
-        //! use rustitude::prelude::*;
+        //! use rustitude_core::prelude::*;
         //! use num_complex::Complex64;
         //! struct A;
         //! impl Node for A {
@@ -257,7 +257,7 @@ pub fn scalar(name: &str) -> Amplitude {
     //! Basic usage:
     //!
     //! ```
-    //! use rustitude::prelude::*;
+    //! use rustitude_core::prelude::*;
     //! let my_scalar = Amplitude::scalar("MyScalar");
     //! assert_eq!(my_scalar.node.parameters(), Some(vec!["value".to_string()]));
     //! ```
@@ -279,7 +279,7 @@ pub fn cscalar(name: &str) -> Amplitude {
     //! Basic usage:
     //!
     //! ```
-    //! use rustitude::prelude::*;
+    //! use rustitude_core::prelude::*;
     //! let my_cscalar = Amplitude::cscalar("MyComplexScalar");
     //! assert_eq!(my_cscalar.node.parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
     //! ```
@@ -301,7 +301,7 @@ pub fn pcscalar(name: &str) -> Amplitude {
     //! Basic usage:
     //!
     //! ```
-    //! use rustitude::prelude::*;
+    //! use rustitude_core::prelude::*;
     //! let my_pcscalar = Amplitude::pcscalar("MyPolarComplexScalar");
     //! assert_eq!(my_pcscalar.node.parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
     //! ```

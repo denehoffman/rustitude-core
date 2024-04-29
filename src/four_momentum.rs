@@ -39,7 +39,7 @@ impl FourMomentum {
     //!
     //! # Examples
     //! ```
-    //! use rustitude::prelude::*;
+    //! use rustitude_core::prelude::*;
     //!
     //! let vec_a = FourMomentum::new(1.3, 0.2, 0.3, 0.1);
     //! let vec_b = FourMomentum::new(4.2, 0.5, 0.4, 0.5);
@@ -94,7 +94,7 @@ impl FourMomentum {
         //!
         //! # Examples
         //! ```
-        //! use rustitude::prelude::*;
+        //! use rustitude_core::prelude::*;
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
         //! //assert_eq!(vec_a.m2(), 20.0 * 20.0 - (1.0 * 1.0 + 0.0 * 0.2 + (-0.1) * (-0.1)));
@@ -126,7 +126,7 @@ impl FourMomentum {
         //! #[macro_use]
         //! use approx::*;
         //!
-        //! use rustitude::prelude::*;
+        //! use rustitude_core::prelude::*;
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, -3.2, 4.0);
         //! let vec_a_COM = vec_a.boost_along(&vec_a);
@@ -145,7 +145,7 @@ impl FourMomentum {
         //!
         //! # Examples
         //! ```
-        //! use rustitude::prelude::*;
+        //! use rustitude_core::prelude::*;
         //! use nalgebra::Vector3;
         //!
         //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
