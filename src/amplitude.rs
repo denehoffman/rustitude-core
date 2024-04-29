@@ -4,7 +4,7 @@ use std::{fmt::Debug, sync::Arc};
 
 use crate::dataset::{Dataset, Event};
 
-/// Creates a wrapped [`Amplitude`] which can be registered by a [`Manager`].
+/// Creates a wrapped [`Amplitude`] which can be registered by a [`crate::manager::Manager`].
 ///
 /// This macro is a convenience method which takes a name and a [`Node`] and generates a new
 /// [`Amplitude`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
@@ -163,7 +163,7 @@ pub trait Node: Sync + Send {
 
     /// A method which specifies the number and order of parameters used by the [`Node`].
     ///
-    /// This method tells the [`Manager`] how to assign its input [`Vec`] of parameter values to
+    /// This method tells the [`crate::manager::Manager`] how to assign its input [`Vec`] of parameter values to
     /// each [`Node`]. If this method returns [`None`], it is implied that the [`Node`] takes no
     /// parameters as input. Otherwise, the parameter names should be listed in the same order they
     /// are expected to be given as input to the [`Node::calculate`] method.
@@ -176,9 +176,9 @@ pub trait Node: Sync + Send {
 /// associated with the [`Node`]. This allows us to distinguish multiple uses of the same [`Node`]
 /// in an analysis, and makes each [`Node`]'s parameters unique.
 ///
-/// The common construction pattern is through the macros [`amplitude!`], [`scalar!`], and
-/// [`cscalar`] which create a [`Arc<RwLock<Amplitude>>`], an [`Arc<RwLock<Scalar>>`], and an
-/// [`Arc<RwLock<ComplexScalar>>`] respectively.
+/// The common construction pattern is through the macro [`amplitude!`] and functions [`scalar`],
+/// [`cscalar`], and [`pcscalar`] which a generic [`Amplitude`], a [`Scalar`], a [`ComplexScalar`],
+/// and a [`PolarComplexScalar`] respectively
 #[derive(Clone)]
 pub struct Amplitude {
     /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
@@ -200,7 +200,7 @@ impl Amplitude {
         //!
         //! The [`amplitude!`] macro is probably the cleaner way of doing this, since it also wraps
         //! this [`Amplitude`] in an [`Arc<RwLock<Amplitude>>`] container which can then be registered by
-        //! a [`Manager`].
+        //! a [`crate::manager::Manager`].
         //!
         //! # Examples
         //!
@@ -227,20 +227,20 @@ impl Amplitude {
         //! Precalculates the stored [`Node`].
         //!
         //! This method is automatically called when a new [`Amplitude`] is registered by a
-        //! [`Manager`]
+        //! [`crate::manager::Manager`]
         //!
-        //! See also: [`Manager::register`], [`Node::precalculate`]
+        //! See also: [`crate::manager::Manage::register`], [`Node::precalculate`]
         self.node.write().precalculate(dataset);
     }
     pub fn compute(&self, parameters: &[f64], event: &Event) -> Complex64 {
         //! Calculates the stored [`Node`].
         //!
-        //! This method is intended to be called by a [`Manager`] in the [`Manager::compute`]
-        //! method. You can also use this method to test amplitudes, since the [`Manager::compute`]
+        //! This method is intended to be called by a [`crate::manager::Manager`] in the [`crate::manager::Manager::compute`]
+        //! method. You can also use this method to test amplitudes, since the [`crate::manager::Manager::compute`]
         //! method will automatically calculate the absolute-square of the amplitude and return a
         //! [`f64`] rather than a [`Complex64`].
         //!
-        //! See also: [`Manager::compute`], [`Node::calculate`]
+        //! See also: [`crate::manager::Manager::compute`], [`Node::calculate`]
         self.node.read().calculate(parameters, event)
     }
 }
@@ -249,8 +249,7 @@ pub fn scalar(name: &str) -> Amplitude {
     //! Creates a named [`Scalar`].
     //!
     //! This is a convenience method to generate an [`Amplitude`] which is just a single free
-    //! parameter called `value`. The macro [`scalar!`] will wrap this [`Amplitude`] in an
-    //! [`Arc<RwLock<Scalar>>`]> container which can then be registered by a [`Manager`].
+    //! parameter called `value`.
     //!
     //! # Examples
     //!
@@ -270,9 +269,7 @@ pub fn cscalar(name: &str) -> Amplitude {
     //! Creates a named [`ComplexScalar`].
     //!
     //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-    //! value determined by two parameters, `real` and `imag`. The macro [`cscalar!`] will
-    //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
-    //! then be registered by a [`Manager`].
+    //! value determined by two parameters, `real` and `imag`.
     //!
     //! # Examples
     //!
@@ -292,9 +289,7 @@ pub fn pcscalar(name: &str) -> Amplitude {
     //! Creates a named [`PolarComplexScalar`].
     //!
     //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-    //! value determined by two parameters, `real` and `imag`. The macro [`pcscalar!`] will
-    //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
-    //! then be registered by a [`Manager`].
+    //! value determined by two parameters, `real` and `imag`.
     //!
     //! # Examples
     //!

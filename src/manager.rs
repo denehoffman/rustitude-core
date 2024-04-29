@@ -154,7 +154,7 @@ impl AmplitudeType {
         }
     }
     pub fn get_amplitude(&self) -> &Amplitude {
-        //! Retrieves the internal [`Amplitude`] as a reference to an [`Arc<RwLock<Amplitude>>`].
+        //! Retrieves the internal [`Amplitude`] as a reference.
         match self {
             Self::Activated(ref arc) => arc,
             Self::Deactivated(ref arc) => arc,
