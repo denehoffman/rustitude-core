@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.2 (2024-04-29)
+
+### Other
+
+ - <csr-id-8d9ec2e806f7d6f47413377e7d1ff92fa8819802/> version bump
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 1 commit contributed to the release.
+ - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Version bump ([`8d9ec2e`](https://github.com/denehoffman/rustitude-core/commit/8d9ec2e806f7d6f47413377e7d1ff92fa8819802))
+</details>
+
 ## 0.3.1 (2024-04-29)
 
 <csr-id-35fd81ade394522801d288e4a2d084b581d5e5a5/>
@@ -13,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <csr-id-55443f6454e0072abc3cfc41d38e5fa297cdb9cd/>
 <csr-id-aa9d91971816ff3d99a47e928be5bfb2360c0694/>
 <csr-id-042cee3a55e95567058401a72260911fcffccc0b/>
+<csr-id-ba2e0b7750188d5d837ea32d03a4bdbea157819d/>
 
 ### Chore
 
@@ -86,9 +111,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 22 commits contributed to the release over the course of 19 calendar days.
- - 19 days passed between releases.
- - 20 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 85 commits contributed to the release over the course of 66 calendar days.
+ - 86 days passed between releases.
+ - 43 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
@@ -98,6 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release rustitude-core v0.3.1 ([`1b6436c`](https://github.com/denehoffman/rustitude-core/commit/1b6436c869266a7cb19b9f98699a11bd353f12d8))
     - Fix docs ([`ad26a01`](https://github.com/denehoffman/rustitude-core/commit/ad26a016702f345cfca364ec1410ff1d9b218cd8))
     - Fix more tests ([`a162728`](https://github.com/denehoffman/rustitude-core/commit/a1627283a98fdbdb2cd70cad5428d6ec02119ef9))
     - Fix tests with renamed lib ([`5f3e4f4`](https://github.com/denehoffman/rustitude-core/commit/5f3e4f4a2b18bcb315de99918ae0d5b7d8420ab9))
@@ -120,6 +146,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Parking_lot::RwLocks don't need to be unwrapped ([`d33c869`](https://github.com/denehoffman/rustitude-core/commit/d33c869c8167711453d4072535a711442099c556))
     - Switch to parking_lot::RwLock ([`294c5e4`](https://github.com/denehoffman/rustitude-core/commit/294c5e4c66694a39f5b2a6d90d68d2acedd17208))
     - Add amplitude::PolarComplexScalar ([`31de0d8`](https://github.com/denehoffman/rustitude-core/commit/31de0d8595fd3d1c94f69dd6b2370ac09a731f44))
+    - Release rustitude v0.3.1 ([`54efefe`](https://github.com/denehoffman/rustitude-core/commit/54efefe447a0d00b4da366a4fb3198662f4c6cc7))
+    - Update README.md ([`32fb835`](https://github.com/denehoffman/rustitude-core/commit/32fb8351ee7fa4d1b8883391f3360a63a643497d))
+    - Add pretty printing to Parameter struct ([`bf655e4`](https://github.com/denehoffman/rustitude-core/commit/bf655e45feab393115b52ac711d4e9d3d487e799))
+    - Formalize Parameter struct ([`060bd61`](https://github.com/denehoffman/rustitude-core/commit/060bd61296a4311ab3fd57f91ddf9a66187a9e7f))
+    - Update README.md ([`b9c9730`](https://github.com/denehoffman/rustitude-core/commit/b9c973034a53153de41370591b64d7f8817e87a3))
+    - Rework loading from parquet and different ways to load EPS ([`15f3afe`](https://github.com/denehoffman/rustitude-core/commit/15f3afe9a97a1715a67095d5dcd2b8ea5fbd8e07))
+    - Update README.md ([`03d7239`](https://github.com/denehoffman/rustitude-core/commit/03d7239ab40a9edc3e545e8ea9051c6507658e8f))
+    - Modify output of Manage::parameters to include other parameter fields ([`ae0f81f`](https://github.com/denehoffman/rustitude-core/commit/ae0f81f9e12236ecfb0755522773b2c18d2874ba))
+    - Make Manager::compute public again ([`f5d1b75`](https://github.com/denehoffman/rustitude-core/commit/f5d1b75e8c0d97f9c2090afb6778f31bd0d61804))
+    - Fix tests ([`69b3dce`](https://github.com/denehoffman/rustitude-core/commit/69b3dce41f3aedcb07c6f5f56e4529086bba163d))
+    - Re-export num_complex::Complex64 ([`8c9cf90`](https://github.com/denehoffman/rustitude-core/commit/8c9cf902b85584098e754f02381ac3f3735170e6))
+    - Reorganize amplitude module into amplitude and manager restructure manager via Manage trait ([`5307dc7`](https://github.com/denehoffman/rustitude-core/commit/5307dc79d26eaf38692e558f72a5f9185d78db68))
+    - Remove line from docs-header.html ([`042cee3`](https://github.com/denehoffman/rustitude-core/commit/042cee3a55e95567058401a72260911fcffccc0b))
+    - Update .gitignore ([`1d91ee9`](https://github.com/denehoffman/rustitude-core/commit/1d91ee9b2928b9761b0568104ea5e8b7841bf24c))
+    - Update Cargo.lock ([`35fd81a`](https://github.com/denehoffman/rustitude-core/commit/35fd81ade394522801d288e4a2d084b581d5e5a5))
+    - Document ParameterType ([`e0509c9`](https://github.com/denehoffman/rustitude-core/commit/e0509c98ab2389991b78980b7df01d4bf2ee5369))
+    - Document Scalar and ComplexScalar ([`fcd1fc0`](https://github.com/denehoffman/rustitude-core/commit/fcd1fc0584eeccdac26571b1422212e2ef2dee4e))
+    - Document Amplitude ([`2793683`](https://github.com/denehoffman/rustitude-core/commit/2793683c3820e127efa817fb324ec78353ba7064))
+    - Document Node ([`182ac51`](https://github.com/denehoffman/rustitude-core/commit/182ac516a990ee2c9fccebcc253397c0bcf6db8e))
+    - Document macros ([`54197fc`](https://github.com/denehoffman/rustitude-core/commit/54197fc39b455db3b10f820ac09185f11eb12588))
+    - Remove nightly-only feature which was unused ([`6cb74a2`](https://github.com/denehoffman/rustitude-core/commit/6cb74a26eccd5311bd9c42461b4a8340e55acf0c))
+    - Create rust.yml ([`343e9cc`](https://github.com/denehoffman/rustitude-core/commit/343e9cc4e7bb408a60d7d86ae535e97bd6a5c41a))
+    - Delete .github/workflows/release-plz.yml ([`a208525`](https://github.com/denehoffman/rustitude-core/commit/a208525dfb7cc79348c0eeef2c447197840a1563))
+    - Reorganization ([`7f92845`](https://github.com/denehoffman/rustitude-core/commit/7f928459688704d8eab6c67e00a549321c6709b6))
+    - Update rustitude-gluex Cargo.toml ([`9eca00b`](https://github.com/denehoffman/rustitude-core/commit/9eca00bec3df06136e4bf71be5d74cc560b728cc))
+    - Version bump ([`666d2e6`](https://github.com/denehoffman/rustitude-core/commit/666d2e6b4bfa89f281fb0b06c06ce3e5b835e525))
+    - Release-plz settings ([`62d27a6`](https://github.com/denehoffman/rustitude-core/commit/62d27a6c1fd93bd3ae41deed38d904884b1e442b))
+    - Figured it out ([`3d5aaba`](https://github.com/denehoffman/rustitude-core/commit/3d5aaba517c23ff6e1b17faeb1f87e1fdda9ad8a))
+    - Trying again ([`22b5493`](https://github.com/denehoffman/rustitude-core/commit/22b54936f75cba19955371094324ac18e821aebc))
+    - A few more fixes ([`da05752`](https://github.com/denehoffman/rustitude-core/commit/da05752e412781f3818c38b9514f164c5aeefd86))
+    - Fix version ([`1dd6433`](https://github.com/denehoffman/rustitude-core/commit/1dd643306b88115882bb6a6fe3dc51bee7747fe7))
+    - Some more clean up ([`a7b0df1`](https://github.com/denehoffman/rustitude-core/commit/a7b0df194671e5bccdc078c9df2d2a290f51a702))
+    - Reset version ([`2310315`](https://github.com/denehoffman/rustitude-core/commit/231031574b0a52fcc310f0a241f36e9ac9e4fc69))
+    - Get rid of expect, gluex ([`73067f2`](https://github.com/denehoffman/rustitude-core/commit/73067f2c6f657ba3b35a197a0ab2ea8029e359e6))
+    - Auto stash before revert of "readmes" ([`f2dc808`](https://github.com/denehoffman/rustitude-core/commit/f2dc808222b59d69d221be15bfd1029bf27f5f7a))
+    - Revert "readmes" ([`04e5473`](https://github.com/denehoffman/rustitude-core/commit/04e54739064a384a4f72e87015c930931fce2b5e))
+    - Readmes ([`4525d23`](https://github.com/denehoffman/rustitude-core/commit/4525d23141f022675674fa99d74bc0c25e3b56dd))
+    - Fix media ([`e3320e1`](https://github.com/denehoffman/rustitude-core/commit/e3320e17ecd5c2f13ba257cdc5a4e65091a1287b))
+    - Merge branch 'main' of github.com:denehoffman/rustitude ([`586abbf`](https://github.com/denehoffman/rustitude-core/commit/586abbf045ed4dc4b6aa8b84046ca983dff41818))
+    - Undo bad commits ([`21b66dc`](https://github.com/denehoffman/rustitude-core/commit/21b66dcdf5c3ca0e60f7cb340a98190e3fb8b351))
+    - Adjusting changelogs prior to release of rustitude v0.3.0 ([`21f3871`](https://github.com/denehoffman/rustitude-core/commit/21f38711c669aa2e8d13fb67d71bee65c82073b8))
+    - Adjusting changelogs prior to release of rustitude v0.3.0 ([`0d12f1b`](https://github.com/denehoffman/rustitude-core/commit/0d12f1ba923d7c3c6da44e6299af0d0e3f8f7486))
+    - Preliminary changelog ([`6a9e174`](https://github.com/denehoffman/rustitude-core/commit/6a9e17470623fe33c6ca1e297f9e5f41ccb86a61))
+    - Merge pull request #4 from denehoffman/the_everything_is_a_vector_rewrite ([`c47ba17`](https://github.com/denehoffman/rustitude-core/commit/c47ba171fd517f9c08e0d6f52b5b2b4cec583cc5))
+    - Get rid of benchmarks for now, move mds ([`7526439`](https://github.com/denehoffman/rustitude-core/commit/7526439994bed98a457aa67fbd223ecf93e95b26))
+    - First attempt separating submodules ([`605a77e`](https://github.com/denehoffman/rustitude-core/commit/605a77e83e418b2e6658d01e4f05a62c46347012))
+    - Doctest ([`db41c39`](https://github.com/denehoffman/rustitude-core/commit/db41c39e93443701f2a45bda806bfd438a6ba141))
+    - More convenient API changes ([`9e247af`](https://github.com/denehoffman/rustitude-core/commit/9e247afe6fb9bc845fc00249f4ce9f35a3102960))
+    - Finished main bulk of code I think ([`1ebc06d`](https://github.com/denehoffman/rustitude-core/commit/1ebc06ddbfc3141143e21af6aee3f9fe521e6d7e))
+    - Move aux_data back to node level, speeds up everything ([`b85f1f5`](https://github.com/denehoffman/rustitude-core/commit/b85f1f59eef49a38c5c75132ebbaba507d232967))
+    - Add F0 amplitude and fix benchmarks ([`daca025`](https://github.com/denehoffman/rustitude-core/commit/daca025a707b5b8ee350f3fe7262a964024c1c58))
+    - Update the way parameters are registered ([`db587b5`](https://github.com/denehoffman/rustitude-core/commit/db587b5c5a82bf3d89637f0d542f8c5662554085))
+    - Small demo, incomplete ([`cab86ae`](https://github.com/denehoffman/rustitude-core/commit/cab86aee21e1adf61b51d6400f1737090e1afba8))
+    - I think I've failed again ([`7144a4f`](https://github.com/denehoffman/rustitude-core/commit/7144a4fcfe3e2db155cb7e1cf8dffd3c5d422b8f))
+    - Create basic amplitude API ([`38870c2`](https://github.com/denehoffman/rustitude-core/commit/38870c27f0454ef903deb14cdb2507422761623c))
+    - Add some benchmarks, speed up kmatrix by precalculating more of the p-vector ([`c46d2c4`](https://github.com/denehoffman/rustitude-core/commit/c46d2c48fec6e34741989508aa7fb655773685e4))
+    - Trying out some SIMD stuff ([`927555d`](https://github.com/denehoffman/rustitude-core/commit/927555d85f54e80be3bc2bcf74d02fb82cec2c51))
+    - First commit for this branch ([`12ec2a4`](https://github.com/denehoffman/rustitude-core/commit/12ec2a421ec25edd90ac7f82e11616e229eb5297))
+    - Some updates to bacon and other configs ([`55443f6`](https://github.com/denehoffman/rustitude-core/commit/55443f6454e0072abc3cfc41d38e5fa297cdb9cd))
+    - First commit of functional code ([`aa9d919`](https://github.com/denehoffman/rustitude-core/commit/aa9d91971816ff3d99a47e928be5bfb2360c0694))
+    - Prototype ([`b03d9c6`](https://github.com/denehoffman/rustitude-core/commit/b03d9c6b35e46bca10f7d47fa1e7528386cf7a0a))
+    - Gitignore ([`2c082e9`](https://github.com/denehoffman/rustitude-core/commit/2c082e9e6e20a238345d32c5164c35b77ef6239f))
 </details>
 
 ## 0.3.0 (2024-04-05)
