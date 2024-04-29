@@ -23,7 +23,7 @@ use crate::dataset::{Dataset, Event};
 ///     fn parameters(&self) -> Option<Vec<String>> {None}
 /// }
 ///
-/// assert_eq!(amplitude!("MyAmplitude", A).read().compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
+/// assert_eq!(amplitude!("MyAmplitude", A).compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
 /// ```
 #[macro_export]
 macro_rules! amplitude {
@@ -99,7 +99,7 @@ macro_rules! amplitude {
 ///     }
 ///
 ///     fn precalculate(&mut self, dataset: &Dataset) {
-///         self.1 = dataset
+///         self.1 = dataset.events.read()
 ///             .par_iter()
 ///             .map(|event| {
 ///                 let resonance = event.daughter_p4s[0] + event.daughter_p4s[1];
@@ -216,7 +216,7 @@ impl Amplitude {
         //!     fn parameters(&self) -> Option<Vec<String>> {None}
         //! }
         //!
-        //! assert_eq!(Amplitude::new("A", A).name, "A".to_string());
+        //! assert_eq!(Amplitude::new("A", Box::new(A)).name, "A".to_string());
         //! ```
         Self {
             name: name.to_string(),
@@ -258,8 +258,8 @@ pub fn scalar(name: &str) -> Amplitude {
     //!
     //! ```
     //! use rustitude_core::prelude::*;
-    //! let my_scalar = Amplitude::scalar("MyScalar");
-    //! assert_eq!(my_scalar.node.parameters(), Some(vec!["value".to_string()]));
+    //! let my_scalar = scalar("MyScalar");
+    //! assert_eq!(my_scalar.node.read().parameters(), Some(vec!["value".to_string()]));
     //! ```
     Amplitude {
         name: name.to_string(),
@@ -280,8 +280,8 @@ pub fn cscalar(name: &str) -> Amplitude {
     //!
     //! ```
     //! use rustitude_core::prelude::*;
-    //! let my_cscalar = Amplitude::cscalar("MyComplexScalar");
-    //! assert_eq!(my_cscalar.node.parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
+    //! let my_cscalar = cscalar("MyComplexScalar");
+    //! assert_eq!(my_cscalar.node.read().parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
     //! ```
     Amplitude {
         name: name.to_string(),
@@ -302,8 +302,8 @@ pub fn pcscalar(name: &str) -> Amplitude {
     //!
     //! ```
     //! use rustitude_core::prelude::*;
-    //! let my_pcscalar = Amplitude::pcscalar("MyPolarComplexScalar");
-    //! assert_eq!(my_pcscalar.node.parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
+    //! let my_pcscalar = pcscalar("MyPolarComplexScalar");
+    //! assert_eq!(my_pcscalar.node.read().parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
     //! ```
     Amplitude {
         name: name.to_string(),

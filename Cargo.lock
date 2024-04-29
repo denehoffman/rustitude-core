@@ -959,6 +959,7 @@ dependencies = [
  "parking_lot",
  "parquet",
  "rayon",
+ "sphrs",
 ]
 
 [[package]]
@@ -1018,6 +1019,17 @@ name = "snap"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b6b67fb9a61334225b5b790716f609cd58395f895b3fe8b328786812a40bc3b"
+
+[[package]]
+name = "sphrs"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a1908b37a136e29c075b9e46581fb4a1b9ff7feaacc5cf6100fabb9421927da1"
+dependencies = [
+ "num",
+ "num-complex",
+ "num-traits",
+]
 
 [[package]]
 name = "static_assertions"
