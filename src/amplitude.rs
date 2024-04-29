@@ -1,5 +1,6 @@
 use num::complex::Complex64;
-use std::fmt::Debug;
+use parking_lot::RwLock;
+use std::{fmt::Debug, sync::Arc};
 
 use crate::dataset::{Dataset, Event};
 
@@ -27,78 +28,7 @@ use crate::dataset::{Dataset, Event};
 #[macro_export]
 macro_rules! amplitude {
     ($name:expr, $node:expr) => {{
-        use parking_lot::RwLock;
-        use std::sync::Arc;
-        Arc::new(RwLock::new(Amplitude::new($name, $node)))
-    }};
-}
-
-/// Creates a wrapped [`Scalar`] which can be registered by a [`Manager`].
-///
-/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
-/// [`Scalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use rustitude::prelude::*;
-/// use num_complex::Complex64;
-/// assert_eq!(scalar!("MyScalar").read().compute(&[4.3], &Event::default()), Complex64::new(4.3, 0.0));
-/// ```
-#[macro_export]
-macro_rules! scalar {
-    ($name:expr) => {{
-        use parking_lot::RwLock;
-        use std::sync::Arc;
-        Arc::new(RwLock::new(Amplitude::scalar($name)))
-    }};
-}
-
-/// Creates a wrapped [`ComplexScalar`] which can be registered by a [`Manager`].
-///
-/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
-/// [`ComplexScalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use rustitude::prelude::*;
-/// use num_complex::Complex64;
-/// assert_eq!(cscalar!("MyCScalar").read().compute(&[4.3, 6.2], &Event::default()), Complex64::new(4.3, 6.2));
-/// ```
-#[macro_export]
-macro_rules! cscalar {
-    ($name:expr) => {{
-        use parking_lot::RwLock;
-        use std::sync::Arc;
-        Arc::new(RwLock::new(Amplitude::cscalar($name)))
-    }};
-}
-
-/// Creates a wrapped [`PolarComplexScalar`] which can be registered by a [`Manager`].
-///
-/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
-/// [`PolarComplexScalar`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use rustitude::prelude::*;
-/// use num_complex::Complex64;
-/// assert_eq!(pcscalar!("MyPCScalar").read().compute(&[4.3, 6.2], &Event::default()), 4.3 * Complex64::cis(6.2));
-/// ```
-#[macro_export]
-macro_rules! pcscalar {
-    ($name:expr) => {{
-        use parking_lot::RwLock;
-        use std::sync::Arc;
-        Arc::new(RwLock::new(Amplitude::pcscalar($name)))
+        Amplitude::new($name, Box::new($node))
     }};
 }
 
@@ -249,13 +179,14 @@ pub trait Node: Sync + Send {
 /// The common construction pattern is through the macros [`amplitude!`], [`scalar!`], and
 /// [`cscalar`] which create a [`Arc<RwLock<Amplitude>>`], an [`Arc<RwLock<Scalar>>`], and an
 /// [`Arc<RwLock<ComplexScalar>>`] respectively.
+#[derive(Clone)]
 pub struct Amplitude {
     /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
     pub name: String,
     /// A [`Node`] which contains all of the operations needed to compute a [`Complex64`] from an
     /// [`Event`] in a [`Dataset`], a [`Vec<f64>`] of parameter values, and possibly some
     /// precomputed values.
-    pub node: Box<dyn Node>,
+    pub node: Arc<RwLock<Box<dyn Node>>>,
 }
 impl Debug for Amplitude {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -264,7 +195,7 @@ impl Debug for Amplitude {
     }
 }
 impl Amplitude {
-    pub fn new<N: Node + 'static>(name: &str, node: N) -> Self {
+    pub fn new(name: &str, node: Box<dyn Node>) -> Self {
         //! Creates an named [`Amplitude`] from a [`Node`].
         //!
         //! The [`amplitude!`] macro is probably the cleaner way of doing this, since it also wraps
@@ -289,82 +220,17 @@ impl Amplitude {
         //! ```
         Self {
             name: name.to_string(),
-            node: Box::new(node),
+            node: Arc::new(RwLock::new(node)),
         }
     }
-    pub fn scalar(name: &str) -> Self {
-        //! Creates a named [`Scalar`].
-        //!
-        //! This is a convenience method to generate an [`Amplitude`] which is just a single free
-        //! parameter called `value`. The macro [`scalar!`] will wrap this [`Amplitude`] in an
-        //! [`Arc<RwLock<Scalar>>`]> container which can then be registered by a [`Manager`].
-        //!
-        //! # Examples
-        //!
-        //! Basic usage:
-        //!
-        //! ```
-        //! use rustitude::prelude::*;
-        //! let my_scalar = Amplitude::scalar("MyScalar");
-        //! assert_eq!(my_scalar.node.parameters(), Some(vec!["value".to_string()]));
-        //! ```
-        Self {
-            name: name.to_string(),
-            node: Box::new(Scalar),
-        }
-    }
-    pub fn cscalar(name: &str) -> Self {
-        //! Creates a named [`ComplexScalar`].
-        //!
-        //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-        //! value determined by two parameters, `real` and `imag`. The macro [`cscalar!`] will
-        //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
-        //! then be registered by a [`Manager`].
-        //!
-        //! # Examples
-        //!
-        //! Basic usage:
-        //!
-        //! ```
-        //! use rustitude::prelude::*;
-        //! let my_cscalar = Amplitude::cscalar("MyComplexScalar");
-        //! assert_eq!(my_cscalar.node.parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
-        //! ```
-        Self {
-            name: name.to_string(),
-            node: Box::new(ComplexScalar),
-        }
-    }
-    pub fn pcscalar(name: &str) -> Self {
-        //! Creates a named [`PolarComplexScalar`].
-        //!
-        //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-        //! value determined by two parameters, `real` and `imag`. The macro [`pcscalar!`] will
-        //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
-        //! then be registered by a [`Manager`].
-        //!
-        //! # Examples
-        //!
-        //! Basic usage:
-        //!
-        //! ```
-        //! use rustitude::prelude::*;
-        //! let my_pcscalar = Amplitude::pcscalar("MyPolarComplexScalar");
-        //! assert_eq!(my_pcscalar.node.parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
-        //! ```
-        Self {
-            name: name.to_string(),
-            node: Box::new(PolarComplexScalar),
-        }
-    }
-    pub fn precompute(&mut self, dataset: &Dataset) {
+    pub fn precompute(&self, dataset: &Dataset) {
         //! Precalculates the stored [`Node`].
         //!
         //! This method is automatically called when a new [`Amplitude`] is registered by a
         //! [`Manager`]
         //!
         //! See also: [`Manager::register`], [`Node::precalculate`]
-        self.node.precalculate(dataset);
+        self.node.write().precalculate(dataset);
     }
     pub fn compute(&self, parameters: &[f64], event: &Event) -> Complex64 {
         //! Calculates the stored [`Node`].
@@ -375,7 +241,73 @@ impl Amplitude {
         //! [`f64`] rather than a [`Complex64`].
         //!
         //! See also: [`Manager::compute`], [`Node::calculate`]
-        self.node.calculate(parameters, event)
+        self.node.read().calculate(parameters, event)
+    }
+}
+
+pub fn scalar(name: &str) -> Amplitude {
+    //! Creates a named [`Scalar`].
+    //!
+    //! This is a convenience method to generate an [`Amplitude`] which is just a single free
+    //! parameter called `value`. The macro [`scalar!`] will wrap this [`Amplitude`] in an
+    //! [`Arc<RwLock<Scalar>>`]> container which can then be registered by a [`Manager`].
+    //!
+    //! # Examples
+    //!
+    //! Basic usage:
+    //!
+    //! ```
+    //! use rustitude::prelude::*;
+    //! let my_scalar = Amplitude::scalar("MyScalar");
+    //! assert_eq!(my_scalar.node.parameters(), Some(vec!["value".to_string()]));
+    //! ```
+    Amplitude {
+        name: name.to_string(),
+        node: Arc::new(RwLock::new(Box::new(Scalar))),
+    }
+}
+pub fn cscalar(name: &str) -> Amplitude {
+    //! Creates a named [`ComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`. The macro [`cscalar!`] will
+    //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
+    //! then be registered by a [`Manager`].
+    //!
+    //! # Examples
+    //!
+    //! Basic usage:
+    //!
+    //! ```
+    //! use rustitude::prelude::*;
+    //! let my_cscalar = Amplitude::cscalar("MyComplexScalar");
+    //! assert_eq!(my_cscalar.node.parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
+    //! ```
+    Amplitude {
+        name: name.to_string(),
+        node: Arc::new(RwLock::new(Box::new(ComplexScalar))),
+    }
+}
+pub fn pcscalar(name: &str) -> Amplitude {
+    //! Creates a named [`PolarComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`. The macro [`pcscalar!`] will
+    //! wrap this [`Amplitude`] in an [`Arc<RwLock<ComplexScalar>>`]> container which can
+    //! then be registered by a [`Manager`].
+    //!
+    //! # Examples
+    //!
+    //! Basic usage:
+    //!
+    //! ```
+    //! use rustitude::prelude::*;
+    //! let my_pcscalar = Amplitude::pcscalar("MyPolarComplexScalar");
+    //! assert_eq!(my_pcscalar.node.parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
+    //! ```
+    Amplitude {
+        name: name.to_string(),
+        node: Arc::new(RwLock::new(Box::new(PolarComplexScalar))),
     }
 }
 

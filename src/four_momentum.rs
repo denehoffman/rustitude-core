@@ -87,20 +87,6 @@ impl FourMomentum {
         self.0[3] = value;
     }
 
-    pub fn momentum(&self) -> Vector3<f64> {
-        //! Extract the 3-momentum as a [`nalgebra::Vector3<f64>`]
-        //!
-        //! # Examples
-        //! ```
-        //! use rustitude::prelude::*;
-        //! use nalgebra::Vector3;
-        //!
-        //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
-        //! assert_eq!(vec_a.momentum(), Vector3::new(1.0, 0.2, -0.1));
-        //! ```
-        Vector3::new(self.px(), self.py(), self.pz())
-    }
-
     pub fn m2(&self) -> f64 {
         //! Calculate the invariant $ m^2 $ for this [`FourMomentum`] instance.
         //!
@@ -127,6 +113,45 @@ impl FourMomentum {
         //! [`FourMomentum::m2`]
 
         self.m2().sqrt()
+    }
+
+    pub fn boost_along(&self, other: &Self) -> Self {
+        //! Boosts an instance of [`FourMomentum`] along the $`\overrightarrow{\beta}`$
+        //! vector of another [`FourMomentum`].
+        //!
+        //! Calculates $`\mathbf{\Lambda} \cdot \mathbf{x}`$
+        //!
+        //! # Examples
+        //! ```
+        //! #[macro_use]
+        //! use approx::*;
+        //!
+        //! use rustitude::prelude::*;
+        //!
+        //! let vec_a = FourMomentum::new(20.0, 1.0, -3.2, 4.0);
+        //! let vec_a_COM = vec_a.boost_along(&vec_a);
+        //! assert_abs_diff_eq!(vec_a_COM.px(), 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.py(), 0.0, epsilon = 1e-15);
+        //! assert_abs_diff_eq!(vec_a_COM.pz(), 0.0, epsilon = 1e-15);
+        //! ```
+        let m_boost = other.boost_matrix();
+        (m_boost * Vector4::<f64>::from(self)).into()
+    }
+}
+
+impl FourMomentum {
+    pub fn momentum(&self) -> Vector3<f64> {
+        //! Extract the 3-momentum as a [`nalgebra::Vector3<f64>`]
+        //!
+        //! # Examples
+        //! ```
+        //! use rustitude::prelude::*;
+        //! use nalgebra::Vector3;
+        //!
+        //! let vec_a = FourMomentum::new(20.0, 1.0, 0.2, -0.1);
+        //! assert_eq!(vec_a.momentum(), Vector3::new(1.0, 0.2, -0.1));
+        //! ```
+        Vector3::new(self.px(), self.py(), self.pz())
     }
 
     pub fn beta3(&self) -> Vector3<f64> {
@@ -170,29 +195,6 @@ impl FourMomentum {
             (g - 1.0) * b[2] * b[1] / b2,
             1.0 + (g - 1.0) * b[2] * b[2] / b2,
         )
-    }
-
-    pub fn boost_along(&self, other: &Self) -> Self {
-        //! Boosts an instance of [`FourMomentum`] along the $`\overrightarrow{\beta}`$
-        //! vector of another [`FourMomentum`].
-        //!
-        //! Calculates $`\mathbf{\Lambda} \cdot \mathbf{x}`$
-        //!
-        //! # Examples
-        //! ```
-        //! #[macro_use]
-        //! use approx::*;
-        //!
-        //! use rustitude::prelude::*;
-        //!
-        //! let vec_a = FourMomentum::new(20.0, 1.0, -3.2, 4.0);
-        //! let vec_a_COM = vec_a.boost_along(&vec_a);
-        //! assert_abs_diff_eq!(vec_a_COM.px(), 0.0, epsilon = 1e-15);
-        //! assert_abs_diff_eq!(vec_a_COM.py(), 0.0, epsilon = 1e-15);
-        //! assert_abs_diff_eq!(vec_a_COM.pz(), 0.0, epsilon = 1e-15);
-        //! ```
-        let m_boost = other.boost_matrix();
-        (m_boost * Vector4::<f64>::from(self)).into()
     }
 }
 

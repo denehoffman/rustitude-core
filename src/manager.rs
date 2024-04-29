@@ -1,8 +1,7 @@
 use indexmap::IndexMap as OHashMap;
 use num_complex::Complex64;
-use parking_lot::RwLock;
 use rayon::prelude::*;
-use std::{cmp::Ordering, fmt::Display, sync::Arc};
+use std::{cmp::Ordering, fmt::Display};
 
 use crate::prelude::{Amplitude, Dataset, Event};
 
@@ -127,10 +126,10 @@ impl Parameter {
 #[derive(Debug)]
 pub enum AmplitudeType {
     /// Indicates an [`Amplitude`] is in the "activated" state.
-    Activated(Arc<RwLock<Amplitude>>),
+    Activated(Amplitude),
 
     /// Indicates an [`Amplitude`] is in the "deactivated" state.
-    Deactivated(Arc<RwLock<Amplitude>>),
+    Deactivated(Amplitude),
 }
 impl AmplitudeType {
     pub fn is_activated(&self) -> bool {
@@ -143,18 +142,18 @@ impl AmplitudeType {
     pub fn activate(&mut self) {
         //! Converts an [`AmplitudeType::Deactivated`] type into an [`AmplitudeType::Activated`]
         //! type.
-        if let Self::Deactivated(ref arc) = self {
-            *self = Self::Activated(Arc::clone(arc));
+        if let Self::Deactivated(ref amp) = self {
+            *self = Self::Activated(amp.clone()); // TODO: fix this?
         }
     }
     pub fn deactivate(&mut self) {
         //! Converts an [`AmplitudeType::Activated`] type into an [`AmplitudeType::Deactivated`]
         //! type.
         if let Self::Activated(ref arc) = self {
-            *self = Self::Deactivated(Arc::clone(arc));
+            *self = Self::Deactivated(arc.clone());
         }
     }
-    pub fn get_amplitude(&self) -> &Arc<RwLock<Amplitude>> {
+    pub fn get_amplitude(&self) -> &Amplitude {
         //! Retrieves the internal [`Amplitude`] as a reference to an [`Arc<RwLock<Amplitude>>`].
         match self {
             Self::Activated(ref arc) => arc,
@@ -168,7 +167,7 @@ type ParameterID<'a> = (&'a str, &'a str, &'a str, &'a str);
 
 pub trait Manage {
     fn parameters(&self) -> Vec<Parameter>;
-    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>);
+    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude);
     fn precompute(&mut self);
     fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID);
     fn constrain_amplitude(&mut self, amplitude_1: AmplitudeID, amplitude_2: AmplitudeID);
@@ -217,16 +216,16 @@ type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, Pa
 /// where $`\overrightarrow{p}`$ is a vector of parameters and $`e`$ represents the data from an
 /// [`Event`].
 #[derive(Debug)]
-pub struct Manager<'d> {
+pub struct Manager {
     pub sums: SumMap,
     pub pars: ParMap,
-    data: &'d Dataset,
+    data: Dataset,
     variable_count: usize,
     fixed_variable_count: usize,
 }
 
-impl<'d> Manager<'d> {
-    pub fn new(dataset: &'d Dataset) -> Self {
+impl Manager {
+    pub fn new(dataset: &Dataset) -> Self {
         //! Creates a new [`Manager`] from a &[`Dataset`].
         //!
         //! This is the prefered method for creating new [`Manager`]s. Because no modification ever
@@ -235,7 +234,7 @@ impl<'d> Manager<'d> {
         Self {
             sums: SumMap::default(),
             pars: ParMap::default(),
-            data: dataset,
+            data: dataset.clone(),
             variable_count: 0,
             fixed_variable_count: 0,
         }
@@ -271,7 +270,7 @@ impl<'d> Manager<'d> {
             .get(group_name)
             .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter()
-            .find(|amplitude_type| amplitude_type.get_amplitude().read().name == amplitude_name)
+            .find(|amplitude_type| amplitude_type.get_amplitude().name == amplitude_name)
             .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     fn get_amplitudetype_mut(
@@ -286,7 +285,7 @@ impl<'d> Manager<'d> {
             .get_mut(group_name)
             .unwrap_or_else(|| panic!("Could not find {}", group_name))
             .iter_mut()
-            .find(|amplitude_type| amplitude_type.get_amplitude().read().name == amplitude_name)
+            .find(|amplitude_type| amplitude_type.get_amplitude().name == amplitude_name)
             .unwrap_or_else(|| panic!("Could not find {}", amplitude_name))
     }
     fn apply_to_amplitudes(&mut self, closure: impl Fn(&mut AmplitudeType)) {
@@ -331,7 +330,6 @@ impl<'d> Manager<'d> {
                                 if amplitude_type.is_activated() {
                                     amplitude_type
                                         .get_amplitude()
-                                        .read()
                                         .compute(&amp_parameters, event)
                                 } else {
                                     0.0.into()
@@ -346,12 +344,14 @@ impl<'d> Manager<'d> {
     }
     pub fn compute(&self, parameters: &[f64]) -> Vec<f64> {
         self.data
+            .events
+            .read()
             .par_iter()
             .map(|event| self._compute(parameters, event))
             .collect()
     }
 }
-impl<'d> Manage for Manager<'d> {
+impl Manage for Manager {
     fn parameters(&self) -> Vec<Parameter> {
         let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
         for (_, sum) in self.pars.iter() {
@@ -365,29 +365,29 @@ impl<'d> Manage for Manager<'d> {
         }
         output
     }
-    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
-        amplitude.write().precompute(self.data);
-        let amp_name = amplitude.read().name.clone();
+    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
+        amplitude.precompute(&self.data);
+        let amp_name = amplitude.name.clone();
         self.sums
             .entry(sum_name.to_string())
             .and_modify(|sum_entry| {
                 sum_entry
                     .entry(group_name.to_string())
                     .and_modify(|group_entry| {
-                        group_entry.push(AmplitudeType::Activated(Arc::clone(amplitude)))
+                        group_entry.push(AmplitudeType::Activated(amplitude.clone()))
                     })
-                    .or_insert(vec![AmplitudeType::Activated(Arc::clone(amplitude))]);
+                    .or_insert(vec![AmplitudeType::Activated(amplitude.clone())]);
             })
             .or_insert_with(|| {
                 let mut sum_map = OHashMap::default();
                 sum_map.insert(
                     group_name.to_string(),
-                    vec![AmplitudeType::Activated(Arc::clone(amplitude))],
+                    vec![AmplitudeType::Activated(amplitude.clone())],
                 );
                 sum_map
             });
         let mut pars: Vec<(String, Parameter)> = Vec::new();
-        if let Some(parameter_names) = amplitude.read().node.parameters() {
+        if let Some(parameter_names) = amplitude.node.read().parameters() {
             for parameter_name in parameter_names {
                 pars.push((
                     parameter_name.clone(),
@@ -542,7 +542,7 @@ impl<'d> Manage for Manager<'d> {
         for (_, sum) in self.sums.iter_mut() {
             for (_, group) in sum.iter_mut() {
                 for amplitude in group.iter_mut() {
-                    amplitude.get_amplitude().write().precompute(self.data)
+                    amplitude.get_amplitude().precompute(&self.data)
                 }
             }
         }
@@ -577,22 +577,22 @@ impl<'d> Manage for Manager<'d> {
     }
 }
 
-pub struct MultiManager<'a> {
-    managers: Vec<Manager<'a>>,
+pub struct MultiManager {
+    managers: Vec<Manager>,
 }
 
-impl<'a> MultiManager<'a> {
-    pub fn new(datasets: Vec<&'a Dataset>) -> Self {
+impl MultiManager {
+    pub fn new(datasets: Vec<&Dataset>) -> Self {
         Self {
             managers: datasets.iter().map(|ds| Manager::new(ds)).collect(),
         }
     }
 }
-impl<'a> Manage for MultiManager<'a> {
+impl Manage for MultiManager {
     fn parameters(&self) -> Vec<Parameter> {
         self.managers[0].parameters()
     }
-    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
+    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
         self.managers.iter_mut().for_each(|manager| {
             let amp = (*amplitude).clone(); // TODO: This doesn't actually work.
             manager.register(sum_name, group_name, &amp);
@@ -647,11 +647,11 @@ impl<'a> Manage for MultiManager<'a> {
     }
 }
 
-pub struct ExtendedLogLikelihood<'a> {
-    pub manager: MultiManager<'a>,
+pub struct ExtendedLogLikelihood {
+    pub manager: MultiManager,
 }
-impl<'a> ExtendedLogLikelihood<'a> {
-    pub fn new(data: &'a Dataset, monte_carlo: &'a Dataset) -> Self {
+impl ExtendedLogLikelihood {
+    pub fn new(data: &Dataset, monte_carlo: &Dataset) -> Self {
         Self {
             manager: MultiManager::new(vec![data, monte_carlo]),
         }
@@ -660,13 +660,13 @@ impl<'a> ExtendedLogLikelihood<'a> {
         let data_result: f64 = self.manager.managers[0]
             .compute(parameters)
             .iter()
-            .zip(self.manager.managers[0].data.iter())
+            .zip(self.manager.managers[0].data.events.read().iter())
             .map(|(res, e)| e.weight * res.ln())
             .sum();
         let mc_result: f64 = self.manager.managers[1]
             .compute(parameters)
             .iter()
-            .zip(self.manager.managers[1].data.iter())
+            .zip(self.manager.managers[1].data.events.read().iter())
             .map(|(res, e)| e.weight * res)
             .sum();
         let n_data = self.manager.managers[0].data.len() as f64;
@@ -674,11 +674,11 @@ impl<'a> ExtendedLogLikelihood<'a> {
         data_result - (n_data / n_mc) * mc_result
     }
 }
-impl<'a> Manage for ExtendedLogLikelihood<'a> {
+impl Manage for ExtendedLogLikelihood {
     fn parameters(&self) -> Vec<Parameter> {
         self.manager.parameters()
     }
-    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Arc<RwLock<Amplitude>>) {
+    fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
         self.manager.register(sum_name, group_name, amplitude);
     }
     fn precompute(&mut self) {
