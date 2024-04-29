@@ -12,22 +12,3 @@ pub mod prelude {
     pub use crate::manager::{ExtendedLogLikelihood, Manage, Manager, MultiManager};
     pub use num_complex::Complex64;
 }
-use pyo3::{prelude::*, types::PyDict, wrap_pymodule};
-
-#[pyfunction]
-fn testing() {
-    println!("Testing!");
-}
-
-#[pymodule]
-fn rustitude(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
-    let sys = PyModule::import_bound(py, "sys")?;
-    let sys_modules: Bound<'_, PyDict> = sys.getattr("modules")?.downcast_into()?;
-
-    m.add_function(wrap_pyfunction!(testing, m)?)?;
-    m.add_wrapped(wrap_pymodule!(four_momentum::four_momentum))?;
-    sys_modules.set_item("rustitude.four_momentum", m.getattr("four_momentum")?)?;
-    m.add_wrapped(wrap_pymodule!(amplitude::amplitude))?;
-    sys_modules.set_item("rustitude.amplitude", m.getattr("amplitude")?)?;
-    Ok(())
-}

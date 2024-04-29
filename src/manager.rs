@@ -1,8 +1,7 @@
 use indexmap::IndexMap as OHashMap;
 use num_complex::Complex64;
-use parking_lot::RwLock;
 use rayon::prelude::*;
-use std::{cmp::Ordering, fmt::Display, sync::Arc};
+use std::{cmp::Ordering, fmt::Display};
 
 use crate::prelude::{Amplitude, Dataset, Event};
 
