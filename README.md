@@ -1,7 +1,7 @@
 <p align="center">
   <img
     width="800"
-    src="https://raw.githubusercontent.com/denehoffman/rustitude/main/media/logo.png"
+    src="https://raw.githubusercontent.com/denehoffman/rustitude-core/main/media/logo.png"
   />
 </p>
 <p align="center">
@@ -9,16 +9,16 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/denehoffman/rustitude/commits/main/" alt="Lastest Commits">
-    <img src="https://img.shields.io/github/last-commit/denehoffman/rustitude/main" /></a>
-  <a href="https://github.com/denehoffman/rustitude/actions" alt="Build Status">
-    <img src="https://img.shields.io/github/actions/workflow/status/denehoffman/rustitude/rust.yml" /></a>
+  <a href="https://github.com/denehoffman/rustitude-core/commits/main/" alt="Lastest Commits">
+    <img src="https://img.shields.io/github/last-commit/denehoffman/rustitude-core/main" /></a>
+  <a href="https://github.com/denehoffman/rustitude-core/actions" alt="Build Status">
+    <img src="https://img.shields.io/github/actions/workflow/status/denehoffman/rustitude-core/rust.yml" /></a>
   <a href="LICENSE" alt="License">
-    <img src="https://img.shields.io/github/license/denehoffman/rustitude" /></a>
-  <a href="https://crates.io/crates/rustitude" alt="Rustitude on crates.io">
-    <img src="https://img.shields.io/crates/v/rustitude" /></a>
-  <a href="https://docs.rs/rustitude/latest/rustitude/" alt="Rustitude documentation on docs.rs">
-    <img src="https://img.shields.io/docsrs/rustitude" /></a>
+    <img src="https://img.shields.io/github/license/denehoffman/rustitude-core" /></a>
+  <a href="https://crates.io/crates/rustitude-core" alt="rustitude-core on crates.io">
+    <img src="https://img.shields.io/crates/v/rustitude-core" /></a>
+  <a href="https://docs.rs/rustitude-core/" alt="rustitude-core documentation on docs.rs">
+    <img alt="docs.rs" src="https://img.shields.io/docsrs/rustitude-core"></a>
 </p>
 
 
