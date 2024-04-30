@@ -62,6 +62,18 @@ impl Parameter {
             upper_bound: f64::INFINITY,
         }
     }
+    pub fn get_sum(&self) -> String {
+        self.sum.clone()
+    }
+    pub fn get_group(&self) -> String {
+        self.group.clone()
+    }
+    pub fn get_amplitude(&self) -> String {
+        self.amplitude.clone()
+    }
+    pub fn get_name(&self) -> String {
+        self.name.clone()
+    }
     pub fn increment(&mut self) {
         //! Increments the index by `1`.
         self.index += 1;
@@ -123,7 +135,7 @@ impl Parameter {
 /// particular [`Amplitude`] is activated or deactivated. This can be used to disable an
 /// [`Amplitude`] for calculating a partial projection from a fit. For instance, if a fit contains
 /// multiple Gaussians, deactivating all but one will isolate a particular Gaussian.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AmplitudeType {
     /// Indicates an [`Amplitude`] is in the "activated" state.
     Activated(Amplitude),
@@ -215,7 +227,7 @@ type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, Pa
 ///
 /// where $`\overrightarrow{p}`$ is a vector of parameters and $`e`$ represents the data from an
 /// [`Event`].
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Manager {
     pub sums: SumMap,
     pub pars: ParMap,
