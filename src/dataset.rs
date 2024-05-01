@@ -13,7 +13,7 @@ use rayon::prelude::*;
 
 use crate::prelude::FourMomentum;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct Event {
     pub index: usize,
     pub weight: f64,
