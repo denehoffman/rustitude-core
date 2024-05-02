@@ -5,7 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.3 (2024-05-02)
+
+### Chore
+
+ - <csr-id-a257aace868fb14b062eb9ac2b502a1416c7cab6/> Update README.md
+
+### New Features
+
+ - <csr-id-baf71d09652b2140400013f821cfe40bfa7ef73d/> add pyo3 bindings to all main modules
+ - <csr-id-ceac972d1235d434d5f36ef83402e772f3e9fbc5/> implement Clone for Event
+ - <csr-id-fa7eea606e211784de37d6f43f6d24fac21cae35/> some Clone derives for Manager and additional API access for Parameter
+
+### Bug Fixes
+
+ - <csr-id-be2c1f1bc9928d1674120260ced3cb2d4b107370/> correct the module name for amplitude from dataset (typo)
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 6 commits contributed to the release over the course of 3 calendar days.
+ - 3 days passed between releases.
+ - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Correct the module name for amplitude from dataset (typo) ([`be2c1f1`](https://github.com/denehoffman/rustitude-core/commit/be2c1f1bc9928d1674120260ced3cb2d4b107370))
+    - Add pyo3 bindings to all main modules ([`baf71d0`](https://github.com/denehoffman/rustitude-core/commit/baf71d09652b2140400013f821cfe40bfa7ef73d))
+    - Implement Clone for Event ([`ceac972`](https://github.com/denehoffman/rustitude-core/commit/ceac972d1235d434d5f36ef83402e772f3e9fbc5))
+    - Merge branch 'main' of github.com:denehoffman/rustitude-core ([`4eacf02`](https://github.com/denehoffman/rustitude-core/commit/4eacf02e4137d6a3d2318729c9b25d0c1a1b2d92))
+    - Some Clone derives for Manager and additional API access for Parameter ([`fa7eea6`](https://github.com/denehoffman/rustitude-core/commit/fa7eea606e211784de37d6f43f6d24fac21cae35))
+    - Update README.md ([`a257aac`](https://github.com/denehoffman/rustitude-core/commit/a257aace868fb14b062eb9ac2b502a1416c7cab6))
+</details>
+
 ## 0.3.2 (2024-04-29)
+
+<csr-id-8d9ec2e806f7d6f47413377e7d1ff92fa8819802/>
 
 ### Other
 
@@ -15,7 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 1 commit contributed to the release.
+ - 2 commits contributed to the release.
  - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
@@ -26,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release rustitude-core v0.3.2 ([`4f5bbd5`](https://github.com/denehoffman/rustitude-core/commit/4f5bbd5d259affd3d3e85218ec76bd91a76ee479))
     - Version bump ([`8d9ec2e`](https://github.com/denehoffman/rustitude-core/commit/8d9ec2e806f7d6f47413377e7d1ff92fa8819802))
 </details>
 
