@@ -385,11 +385,11 @@ pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(cscalar, &m)?)?;
     m.add_function(wrap_pyfunction!(pcscalar, &m)?)?;
 
-    parent.add("dataset", &m)?;
+    parent.add("amplitude", &m)?;
     parent
         .py()
         .import_bound("sys")?
         .getattr("modules")?
-        .set_item("rustitude.dataset", &m)?;
+        .set_item("rustitude.amplitude", &m)?;
     Ok(())
 }
