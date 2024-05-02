@@ -1,4 +1,5 @@
 use nalgebra::{Matrix4, Vector3, Vector4};
+use pyo3::prelude::*;
 use std::{
     fmt::Display,
     ops::{Add, Sub},
@@ -8,10 +9,12 @@ use std::{
 use std::simd::prelude::*;
 
 #[cfg(not(feature = "simd"))]
+#[pyclass]
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub struct FourMomentum([f64; 4]);
 
 #[cfg(feature = "simd")]
+#[pyclass]
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub struct FourMomentum(f64x4);
 
@@ -30,6 +33,7 @@ impl Display for FourMomentum {
     }
 }
 
+#[pymethods]
 impl FourMomentum {
     //! A four-momentum structure with helpful methods for boosts.
     //!
@@ -46,6 +50,7 @@ impl FourMomentum {
     //! ```
 
     #[cfg(not(feature = "simd"))]
+    #[new]
     pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
         //! Create a new [`FourMomentum`] from energy and momentum components.
         //!
@@ -54,11 +59,20 @@ impl FourMomentum {
     }
 
     #[cfg(feature = "simd")]
+    #[new]
     pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
         //! Create a new [`FourMomentum`] from energy and momentum components.
         //!
         //! Components are listed in the order $` (E, p_x, p_y, p_z) `$
         Self([e, px, py, pz].into())
+    }
+
+    fn __repr__(&self) -> String {
+        format!("FourMomentum({})", self)
+    }
+
+    fn __str__(&self) -> String {
+        self.to_string()
     }
 
     pub fn e(&self) -> f64 {
@@ -333,4 +347,18 @@ impl<'a> std::iter::Sum<&'a FourMomentum> for FourMomentum {
     fn sum<I: Iterator<Item = &'a FourMomentum>>(iter: I) -> Self {
         iter.fold(FourMomentum::default(), |a, b| a + *b)
     }
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.four_momentum")?;
+    // do stuff with m
+    m.add_class::<FourMomentum>()?;
+
+    parent.add("four_momentum", &m)?;
+    parent
+        .py()
+        .import_bound("sys")?
+        .getattr("modules")?
+        .set_item("rustitude.four_momentum", &m)?;
+    Ok(())
 }

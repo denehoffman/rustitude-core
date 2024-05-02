@@ -1,4 +1,4 @@
-use std::{fmt::Display, fs::File, path::Path, sync::Arc};
+use std::{collections::HashMap, fmt::Display, fs::File, path::Path, sync::Arc};
 
 use itertools::izip;
 use nalgebra::Vector3;
@@ -9,10 +9,12 @@ use parquet::{
     file::reader::{FileReader, SerializedFileReader},
     record::{Field, Row},
 };
+use pyo3::prelude::*;
 use rayon::prelude::*;
 
 use crate::prelude::FourMomentum;
 
+#[pyclass]
 #[derive(Debug, Default, Clone)]
 pub struct Event {
     pub index: usize,
@@ -39,6 +41,12 @@ impl Display for Event {
             self.eps[0], self.eps[1], self.eps[2]
         )?;
         Ok(())
+    }
+}
+#[pymethods]
+impl Event {
+    pub fn __str__(&self) -> String {
+        format!("{}", self)
     }
 }
 impl Event {
@@ -349,9 +357,126 @@ impl Event {
     }
 }
 
+#[pyclass]
 #[derive(Default, Debug, Clone)]
 pub struct Dataset {
     pub events: Arc<RwLock<Vec<Event>>>,
+}
+
+#[pymethods]
+impl Dataset {
+    pub fn __len__(&self) -> PyResult<usize> {
+        Ok(self.len())
+    }
+
+    pub fn __getitem__(&self, idx: isize) -> PyResult<Py<Event>> {
+        Ok(Python::with_gil(|py| Py::new(py, self.events.read()[idx as usize].clone())).unwrap())
+    }
+
+    // TODO:
+    // pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> PyDataset {}
+    // pub fn reject(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> PyDataset {}
+    // pub fn split(
+    //     mut self,
+    //     variable: impl Fn(&Event) -> f64 + Sync + Send,
+    //     range: (f64, f64),
+    //     nbins: usize,
+    // ) -> (Vec<PyDataset>, PyDataset, PyDataset) {}
+
+    pub fn split_m(
+        &self,
+        range: (f64, f64),
+        nbins: usize,
+        p1: Option<Vec<usize>>,
+        p2: Option<Vec<usize>>,
+    ) -> (Vec<Dataset>, Dataset, Dataset) {
+        let mass = |e: &Event| {
+            let p1_p4 = p1
+                .clone()
+                .unwrap_or(vec![0])
+                .iter()
+                .map(|i| &e.daughter_p4s[*i])
+                .sum::<FourMomentum>();
+            let p2_p4 = p2
+                .clone()
+                .unwrap_or(vec![1])
+                .iter()
+                .map(|i| &e.daughter_p4s[*i])
+                .sum::<FourMomentum>();
+            (p1_p4 + p2_p4).m()
+        };
+        self.clone().split(mass, range, nbins) // TODO: fix clone here eventually
+    }
+
+    // TODO: make some kind of generic "open" method for Python
+    // #[staticmethod]
+    // pub fn from_parquet(path: &str) -> PyDataset {
+    //     PyDataset(Dataset::from_parquet(path))
+    // }
+    #[staticmethod]
+    pub fn from_dict(py: Python, data: HashMap<String, PyObject>) -> PyResult<Dataset> {
+        let e_beam_vec: Vec<f64> = data["E_Beam"].extract(py)?;
+        let px_beam_vec: Vec<f64> = data["Px_Beam"].extract(py)?;
+        let py_beam_vec: Vec<f64> = data["Py_Beam"].extract(py)?;
+        let pz_beam_vec: Vec<f64> = data["Pz_Beam"].extract(py)?;
+        let weight_vec: Vec<f64> = data["Weight"].extract(py)?;
+        let e_finalstate_vec: Vec<Vec<f64>> = data["E_FinalState"].extract(py)?;
+        let px_finalstate_vec: Vec<Vec<f64>> = data["Px_FinalState"].extract(py)?;
+        let py_finalstate_vec: Vec<Vec<f64>> = data["Py_FinalState"].extract(py)?;
+        let pz_finalstate_vec: Vec<Vec<f64>> = data["Pz_FinalState"].extract(py)?;
+        Ok(Dataset::new(
+            (
+                e_beam_vec,
+                px_beam_vec,
+                py_beam_vec,
+                pz_beam_vec,
+                weight_vec,
+                e_finalstate_vec,
+                px_finalstate_vec,
+                py_finalstate_vec,
+                pz_finalstate_vec,
+            )
+                .into_par_iter()
+                .enumerate()
+                .map(
+                    |(
+                        index,
+                        (
+                            e_beam,
+                            px_beam,
+                            py_beam,
+                            pz_beam,
+                            weight,
+                            e_finalstate,
+                            px_finalstate,
+                            py_finalstate,
+                            pz_finalstate,
+                        ),
+                    )| {
+                        Event {
+                            index,
+                            weight,
+                            beam_p4: FourMomentum::new(e_beam, px_beam, py_beam, pz_beam),
+                            recoil_p4: FourMomentum::new(
+                                e_finalstate[0],
+                                px_finalstate[0],
+                                py_finalstate[0],
+                                pz_finalstate[0],
+                            ),
+                            daughter_p4s: e_finalstate[1..]
+                                .iter()
+                                .zip(px_finalstate[1..].iter())
+                                .zip(py_finalstate[1..].iter())
+                                .zip(pz_finalstate[1..].iter())
+                                .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
+                                .collect(),
+                            ..Default::default()
+                        }
+                    },
+                )
+                .collect(),
+        ))
+    }
 }
 
 impl Dataset {
@@ -546,4 +671,18 @@ impl Dataset {
                 .collect(),
         )
     }
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.dataset")?;
+    // do stuff with m
+    m.add_class::<Event>()?;
+    m.add_class::<Dataset>()?;
+    parent.add("dataset", &m)?;
+    parent
+        .py()
+        .import_bound("sys")?
+        .getattr("modules")?
+        .set_item("rustitude.dataset", &m)?;
+    Ok(())
 }

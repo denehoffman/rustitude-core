@@ -1,5 +1,6 @@
 use num::complex::Complex64;
 use parking_lot::RwLock;
+use pyo3::prelude::*;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::dataset::{Dataset, Event};
@@ -179,6 +180,7 @@ pub trait Node: Sync + Send {
 /// The common construction pattern is through the macro [`amplitude!`] and functions [`scalar`],
 /// [`cscalar`], and [`pcscalar`] which a generic [`Amplitude`], a [`Scalar`], a [`ComplexScalar`],
 /// and a [`PolarComplexScalar`] respectively
+#[pyclass]
 #[derive(Clone)]
 pub struct Amplitude {
     /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
@@ -245,6 +247,7 @@ impl Amplitude {
     }
 }
 
+#[pyfunction]
 pub fn scalar(name: &str) -> Amplitude {
     //! Creates a named [`Scalar`].
     //!
@@ -265,6 +268,8 @@ pub fn scalar(name: &str) -> Amplitude {
         node: Arc::new(RwLock::new(Box::new(Scalar))),
     }
 }
+
+#[pyfunction]
 pub fn cscalar(name: &str) -> Amplitude {
     //! Creates a named [`ComplexScalar`].
     //!
@@ -285,6 +290,8 @@ pub fn cscalar(name: &str) -> Amplitude {
         node: Arc::new(RwLock::new(Box::new(ComplexScalar))),
     }
 }
+
+#[pyfunction]
 pub fn pcscalar(name: &str) -> Amplitude {
     //! Creates a named [`PolarComplexScalar`].
     //!
@@ -368,4 +375,21 @@ impl Node for PolarComplexScalar {
     }
 
     fn precalculate(&mut self, _dataset: &Dataset) {}
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.amplitude")?;
+    // do stuff with m
+    m.add_class::<Amplitude>()?;
+    m.add_function(wrap_pyfunction!(scalar, &m)?)?;
+    m.add_function(wrap_pyfunction!(cscalar, &m)?)?;
+    m.add_function(wrap_pyfunction!(pcscalar, &m)?)?;
+
+    parent.add("dataset", &m)?;
+    parent
+        .py()
+        .import_bound("sys")?
+        .getattr("modules")?
+        .set_item("rustitude.dataset", &m)?;
+    Ok(())
 }

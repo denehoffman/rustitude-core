@@ -1,5 +1,6 @@
 use indexmap::IndexMap as OHashMap;
 use num_complex::Complex64;
+use pyo3::prelude::*;
 use rayon::prelude::*;
 use std::{cmp::Ordering, fmt::Display};
 
@@ -16,6 +17,7 @@ use crate::prelude::{Amplitude, Dataset, Event};
 /// constrained.
 ///
 /// See also: [`Manager::fix`], [`Manager::free`], [`Manager::constrain`]
+#[pyclass]
 #[derive(Debug, PartialEq, PartialOrd, Clone)]
 pub struct Parameter {
     sum: String,
@@ -227,6 +229,7 @@ type ParMap = OHashMap<String, OHashMap<String, OHashMap<String, Vec<(String, Pa
 ///
 /// where $`\overrightarrow{p}`$ is a vector of parameters and $`e`$ represents the data from an
 /// [`Event`].
+#[pyclass]
 #[derive(Debug, Clone)]
 pub struct Manager {
     pub sums: SumMap,
@@ -236,7 +239,9 @@ pub struct Manager {
     fixed_variable_count: usize,
 }
 
+#[pymethods]
 impl Manager {
+    #[new]
     pub fn new(dataset: &Dataset) -> Self {
         //! Creates a new [`Manager`] from a &[`Dataset`].
         //!
@@ -251,6 +256,124 @@ impl Manager {
             fixed_variable_count: 0,
         }
     }
+    #[pyo3(name = "__call__")]
+    pub fn compute(&self, parameters: Vec<f64>) -> Vec<f64> {
+        self.data
+            .events
+            .read()
+            .par_iter()
+            .map(|event| self._compute(&parameters, event))
+            .collect()
+    }
+    #[pyo3(name = "register")]
+    fn py_register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
+        self.register(sum_name, group_name, amplitude);
+    }
+    #[pyo3(name = "constrain")]
+    fn py_constrain(
+        &mut self,
+        parameter_1: (String, String, String, String),
+        parameter_2: (String, String, String, String),
+    ) {
+        self.constrain(
+            (
+                &parameter_1.0,
+                &parameter_1.1,
+                &parameter_1.2,
+                &parameter_1.3,
+            ),
+            (
+                &parameter_2.0,
+                &parameter_2.1,
+                &parameter_2.2,
+                &parameter_2.3,
+            ),
+        );
+    }
+    #[pyo3(name = "constrain_amplitude")]
+    fn py_constrain_amplitude(
+        &mut self,
+        amplitude_1: (String, String, String),
+        amplitude_2: (String, String, String),
+    ) {
+        self.constrain_amplitude(
+            (&amplitude_1.0, &amplitude_1.1, &amplitude_1.2),
+            (&amplitude_2.0, &amplitude_2.1, &amplitude_2.2),
+        );
+    }
+    #[pyo3(name = "activate")]
+    fn py_activate(&mut self, amplitude: (String, String, String)) {
+        self.activate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "deactivate")]
+    fn py_deactivate(&mut self, amplitude: (String, String, String)) {
+        self.deactivate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "fix")]
+    fn py_fix(&mut self, parameter: (String, String, String, String), value: f64) {
+        self.fix(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            value,
+        );
+    }
+
+    #[pyo3(name = "free")]
+    fn py_free(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.free(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "set_bounds")]
+    fn py_set_bounds(
+        &mut self,
+        parameter: (String, String, String, String),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        self.set_bounds(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            lower_bound,
+            upper_bound,
+        );
+    }
+    #[pyo3(name = "set_initial")]
+    fn py_set_initial(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.set_initial(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "get_lower_bounds")]
+    fn py_get_lower_bounds(&self) -> Vec<f64> {
+        self.get_lower_bounds()
+    }
+    #[pyo3(name = "get_upper_bounds")]
+    fn py_get_upper_bounds(&self) -> Vec<f64> {
+        self.get_upper_bounds()
+    }
+    #[pyo3(name = "get_initial_values")]
+    fn py_get_initial_values(&self) -> Vec<f64> {
+        self.get_initial_values()
+    }
+    #[pyo3(name = "parameters", signature = (fixed=false))]
+    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
+        if fixed {
+            self.parameters()
+                .into_iter()
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        } else {
+            self.parameters()
+                .into_iter()
+                .filter(|p| !p.is_fixed())
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        }
+    }
+}
+
+impl Manager {
     fn get_parameter(
         &self,
         sum_name: &str,
@@ -353,14 +476,6 @@ impl Manager {
                     .norm_sqr()
             })
             .sum()
-    }
-    pub fn compute(&self, parameters: &[f64]) -> Vec<f64> {
-        self.data
-            .events
-            .read()
-            .par_iter()
-            .map(|event| self._compute(parameters, event))
-            .collect()
     }
 }
 impl Manage for Manager {
@@ -589,10 +704,126 @@ impl Manage for Manager {
     }
 }
 
+#[pyclass]
 pub struct MultiManager {
     managers: Vec<Manager>,
 }
 
+#[pymethods]
+impl MultiManager {
+    #[new]
+    pub fn py_new(datasets: Vec<Dataset>) -> Self {
+        Self {
+            managers: datasets.iter().map(Manager::new).collect(),
+        }
+    }
+    #[pyo3(name = "register")]
+    fn py_register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
+        self.register(sum_name, group_name, amplitude);
+    }
+    #[pyo3(name = "constrain")]
+    fn py_constrain(
+        &mut self,
+        parameter_1: (String, String, String, String),
+        parameter_2: (String, String, String, String),
+    ) {
+        self.constrain(
+            (
+                &parameter_1.0,
+                &parameter_1.1,
+                &parameter_1.2,
+                &parameter_1.3,
+            ),
+            (
+                &parameter_2.0,
+                &parameter_2.1,
+                &parameter_2.2,
+                &parameter_2.3,
+            ),
+        );
+    }
+    #[pyo3(name = "constrain_amplitude")]
+    fn py_constrain_amplitude(
+        &mut self,
+        amplitude_1: (String, String, String),
+        amplitude_2: (String, String, String),
+    ) {
+        self.constrain_amplitude(
+            (&amplitude_1.0, &amplitude_1.1, &amplitude_1.2),
+            (&amplitude_2.0, &amplitude_2.1, &amplitude_2.2),
+        );
+    }
+    #[pyo3(name = "activate")]
+    fn py_activate(&mut self, amplitude: (String, String, String)) {
+        self.activate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "deactivate")]
+    fn py_deactivate(&mut self, amplitude: (String, String, String)) {
+        self.deactivate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "fix")]
+    fn py_fix(&mut self, parameter: (String, String, String, String), value: f64) {
+        self.fix(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            value,
+        );
+    }
+
+    #[pyo3(name = "free")]
+    fn py_free(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.free(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "set_bounds")]
+    fn py_set_bounds(
+        &mut self,
+        parameter: (String, String, String, String),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        self.set_bounds(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            lower_bound,
+            upper_bound,
+        );
+    }
+    #[pyo3(name = "set_initial")]
+    fn py_set_initial(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.set_initial(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "get_lower_bounds")]
+    fn py_get_lower_bounds(&self) -> Vec<f64> {
+        self.get_lower_bounds()
+    }
+    #[pyo3(name = "get_upper_bounds")]
+    fn py_get_upper_bounds(&self) -> Vec<f64> {
+        self.get_upper_bounds()
+    }
+    #[pyo3(name = "get_initial_values")]
+    fn py_get_initial_values(&self) -> Vec<f64> {
+        self.get_initial_values()
+    }
+    #[pyo3(name = "parameters", signature = (fixed=false))]
+    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
+        if fixed {
+            self.parameters()
+                .into_iter()
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        } else {
+            self.parameters()
+                .into_iter()
+                .filter(|p| !p.is_fixed())
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        }
+    }
+}
 impl MultiManager {
     pub fn new(datasets: Vec<&Dataset>) -> Self {
         Self {
@@ -659,24 +890,38 @@ impl Manage for MultiManager {
     }
 }
 
+#[pyclass]
 pub struct ExtendedLogLikelihood {
     pub manager: MultiManager,
 }
+
 impl ExtendedLogLikelihood {
     pub fn new(data: &Dataset, monte_carlo: &Dataset) -> Self {
         Self {
             manager: MultiManager::new(vec![data, monte_carlo]),
         }
     }
-    pub fn compute(&self, parameters: &[f64]) -> f64 {
+}
+
+#[pymethods]
+impl ExtendedLogLikelihood {
+    #[new]
+    pub fn py_new(data: Dataset, monte_carlo: Dataset) -> Self {
+        Self {
+            manager: MultiManager::new(vec![&data, &monte_carlo]),
+        }
+    }
+    #[pyo3(name = "__call__")]
+    pub fn compute(&self, parameters: Vec<f64>) -> f64 {
+        // assert!(parameters.len() == self.parameters().iter().filter(|p| ???))
         let data_result: f64 = self.manager.managers[0]
-            .compute(parameters)
+            .compute(parameters.to_vec())
             .iter()
             .zip(self.manager.managers[0].data.events.read().iter())
             .map(|(res, e)| e.weight * res.ln())
             .sum();
         let mc_result: f64 = self.manager.managers[1]
-            .compute(parameters)
+            .compute(parameters.to_vec())
             .iter()
             .zip(self.manager.managers[1].data.events.read().iter())
             .map(|(res, e)| e.weight * res)
@@ -684,6 +929,112 @@ impl ExtendedLogLikelihood {
         let n_data = self.manager.managers[0].data.len() as f64;
         let n_mc = self.manager.managers[1].data.len() as f64;
         data_result - (n_data / n_mc) * mc_result
+    }
+    #[pyo3(name = "register")]
+    fn py_register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
+        self.register(sum_name, group_name, amplitude);
+    }
+    #[pyo3(name = "constrain")]
+    fn py_constrain(
+        &mut self,
+        parameter_1: (String, String, String, String),
+        parameter_2: (String, String, String, String),
+    ) {
+        self.constrain(
+            (
+                &parameter_1.0,
+                &parameter_1.1,
+                &parameter_1.2,
+                &parameter_1.3,
+            ),
+            (
+                &parameter_2.0,
+                &parameter_2.1,
+                &parameter_2.2,
+                &parameter_2.3,
+            ),
+        );
+    }
+    #[pyo3(name = "constrain_amplitude")]
+    fn py_constrain_amplitude(
+        &mut self,
+        amplitude_1: (String, String, String),
+        amplitude_2: (String, String, String),
+    ) {
+        self.constrain_amplitude(
+            (&amplitude_1.0, &amplitude_1.1, &amplitude_1.2),
+            (&amplitude_2.0, &amplitude_2.1, &amplitude_2.2),
+        );
+    }
+    #[pyo3(name = "activate")]
+    fn py_activate(&mut self, amplitude: (String, String, String)) {
+        self.activate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "deactivate")]
+    fn py_deactivate(&mut self, amplitude: (String, String, String)) {
+        self.deactivate((&amplitude.0, &amplitude.1, &amplitude.2));
+    }
+    #[pyo3(name = "fix")]
+    fn py_fix(&mut self, parameter: (String, String, String, String), value: f64) {
+        self.fix(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            value,
+        );
+    }
+
+    #[pyo3(name = "free")]
+    fn py_free(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.free(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "set_bounds")]
+    fn py_set_bounds(
+        &mut self,
+        parameter: (String, String, String, String),
+        lower_bound: f64,
+        upper_bound: f64,
+    ) {
+        self.set_bounds(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            lower_bound,
+            upper_bound,
+        );
+    }
+    #[pyo3(name = "set_initial")]
+    fn py_set_initial(&mut self, parameter: (String, String, String, String), initial_value: f64) {
+        self.set_initial(
+            (&parameter.0, &parameter.1, &parameter.2, &parameter.3),
+            initial_value,
+        );
+    }
+    #[pyo3(name = "get_lower_bounds")]
+    fn py_get_lower_bounds(&self) -> Vec<f64> {
+        self.get_lower_bounds()
+    }
+    #[pyo3(name = "get_upper_bounds")]
+    fn py_get_upper_bounds(&self) -> Vec<f64> {
+        self.get_upper_bounds()
+    }
+    #[pyo3(name = "get_initial_values")]
+    fn py_get_initial_values(&self) -> Vec<f64> {
+        self.get_initial_values()
+    }
+    #[pyo3(name = "parameters", signature = (fixed=false))]
+    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
+        if fixed {
+            self.parameters()
+                .into_iter()
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        } else {
+            self.parameters()
+                .into_iter()
+                .filter(|p| !p.is_fixed())
+                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+                .collect()
+        }
     }
 }
 impl Manage for ExtendedLogLikelihood {
@@ -722,4 +1073,19 @@ impl Manage for ExtendedLogLikelihood {
     fn set_initial(&mut self, parameter: ParameterID, initial_value: f64) {
         self.manager.set_initial(parameter, initial_value);
     }
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.manager")?;
+    // do stuff with m
+    m.add_class::<Manager>()?;
+    m.add_class::<MultiManager>()?;
+    m.add_class::<ExtendedLogLikelihood>()?;
+    parent.add("manager", &m)?;
+    parent
+        .py()
+        .import_bound("sys")?
+        .getattr("modules")?
+        .set_item("rustitude.manager", &m)?;
+    Ok(())
 }
