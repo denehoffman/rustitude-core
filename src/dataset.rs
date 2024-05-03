@@ -673,12 +673,17 @@ impl Dataset {
     }
 }
 
-pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let m = PyModule::new_bound(parent.py(), "rustitude.dataset")?;
-    // do stuff with m
+#[pymodule]
+fn dataset(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Event>()?;
     m.add_class::<Dataset>()?;
-    parent.add("dataset", &m)?;
+    Ok(())
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.dataset")?;
+    dataset(&m)?;
+    parent.add_submodule(&m)?;
     parent
         .py()
         .import_bound("sys")?
