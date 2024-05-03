@@ -377,23 +377,10 @@ impl Node for PolarComplexScalar {
     fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
-#[pymodule]
-fn amplitude(m: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Amplitude>()?;
     m.add_function(wrap_pyfunction!(scalar, m)?)?;
     m.add_function(wrap_pyfunction!(cscalar, m)?)?;
     m.add_function(wrap_pyfunction!(pcscalar, m)?)?;
-    Ok(())
-}
-
-pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let m = PyModule::new_bound(parent.py(), "rustitude.amplitude")?;
-    amplitude(&m)?;
-    parent.add_submodule(&m)?;
-    parent
-        .py()
-        .import_bound("sys")?
-        .getattr("modules")?
-        .set_item("rustitude.amplitude", &m)?;
     Ok(())
 }

@@ -673,21 +673,8 @@ impl Dataset {
     }
 }
 
-#[pymodule]
-fn dataset(m: &Bound<'_, PyModule>) -> PyResult<()> {
+pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Event>()?;
     m.add_class::<Dataset>()?;
-    Ok(())
-}
-
-pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let m = PyModule::new_bound(parent.py(), "rustitude.dataset")?;
-    dataset(&m)?;
-    parent.add_submodule(&m)?;
-    parent
-        .py()
-        .import_bound("sys")?
-        .getattr("modules")?
-        .set_item("rustitude.dataset", &m)?;
     Ok(())
 }
