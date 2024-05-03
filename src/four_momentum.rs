@@ -349,12 +349,15 @@ impl<'a> std::iter::Sum<&'a FourMomentum> for FourMomentum {
     }
 }
 
+#[pymodule]
+fn four_momentum(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    m.add_class::<FourMomentum>()?;
+    Ok(())
+}
+
 pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
     let m = PyModule::new_bound(parent.py(), "rustitude.four_momentum")?;
-    // do stuff with m
-    m.add_class::<FourMomentum>()?;
-
-    parent.add("four_momentum", &m)?;
+    parent.add_submodule(&m)?;
     parent
         .py()
         .import_bound("sys")?

@@ -1075,13 +1075,17 @@ impl Manage for ExtendedLogLikelihood {
     }
 }
 
-pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
-    let m = PyModule::new_bound(parent.py(), "rustitude.manager")?;
-    // do stuff with m
+#[pymodule]
+fn manager(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Manager>()?;
     m.add_class::<MultiManager>()?;
     m.add_class::<ExtendedLogLikelihood>()?;
-    parent.add("manager", &m)?;
+    Ok(())
+}
+
+pub fn register_module(parent: &Bound<'_, PyModule>) -> PyResult<()> {
+    let m = PyModule::new_bound(parent.py(), "rustitude.manager")?;
+    parent.add_submodule(&m)?;
     parent
         .py()
         .import_bound("sys")?
