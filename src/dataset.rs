@@ -408,18 +408,25 @@ impl Dataset {
         self.clone().split(mass, range, nbins) // TODO: fix clone here eventually
     }
 
-    // TODO: make some kind of generic "open" method for Python
-    // #[staticmethod]
-    // pub fn from_parquet(path: &str) -> PyDataset {
-    //     PyDataset(Dataset::from_parquet(path))
-    // }
     #[staticmethod]
     pub fn from_dict(py: Python, data: HashMap<String, PyObject>) -> PyResult<Dataset> {
         let e_beam_vec: Vec<f64> = data["E_Beam"].extract(py)?;
         let px_beam_vec: Vec<f64> = data["Px_Beam"].extract(py)?;
         let py_beam_vec: Vec<f64> = data["Py_Beam"].extract(py)?;
         let pz_beam_vec: Vec<f64> = data["Pz_Beam"].extract(py)?;
-        let weight_vec: Vec<f64> = data["Weight"].extract(py)?;
+        let weight_vec: Vec<f64> = data
+            .get("Weight")
+            .map_or_else(|| Ok(vec![1.0; e_beam_vec.len()]), |obj| obj.extract(py))?;
+        let eps_vec: Vec<Vector3<f64>> = data.get("EPS").map_or_else(
+            || Ok(vec![Vector3::default(); e_beam_vec.len()]),
+            |obj| {
+                obj.extract::<Vec<Vec<f64>>>(py).map(|vvf: Vec<Vec<f64>>| {
+                    vvf.into_iter()
+                        .map(Vector3::from_vec)
+                        .collect::<Vec<Vector3<f64>>>()
+                })
+            },
+        )?;
         let e_finalstate_vec: Vec<Vec<f64>> = data["E_FinalState"].extract(py)?;
         let px_finalstate_vec: Vec<Vec<f64>> = data["Px_FinalState"].extract(py)?;
         let py_finalstate_vec: Vec<Vec<f64>> = data["Py_FinalState"].extract(py)?;
@@ -431,6 +438,7 @@ impl Dataset {
                 py_beam_vec,
                 pz_beam_vec,
                 weight_vec,
+                eps_vec,
                 e_finalstate_vec,
                 px_finalstate_vec,
                 py_finalstate_vec,
@@ -447,6 +455,7 @@ impl Dataset {
                             py_beam,
                             pz_beam,
                             weight,
+                            eps,
                             e_finalstate,
                             px_finalstate,
                             py_finalstate,
@@ -470,71 +479,15 @@ impl Dataset {
                                 .zip(pz_finalstate[1..].iter())
                                 .map(|(((e, px), py), pz)| FourMomentum::new(*e, *px, *py, *pz))
                                 .collect(),
-                            ..Default::default()
+                            eps,
                         }
                     },
                 )
                 .collect(),
         ))
     }
-}
 
-impl Dataset {
-    pub fn new(events: Vec<Event>) -> Self {
-        Dataset {
-            events: Arc::new(RwLock::new(events)),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.events.read().is_empty()
-    }
-
-    pub fn len(&self) -> usize {
-        self.events.read().len()
-    }
-
-    pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
-        let (mut selected, mut rejected): (Vec<_>, Vec<_>) =
-            self.events.write().par_drain(..).partition(query);
-        selected
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, event)| event.index = i);
-        rejected
-            .par_iter_mut()
-            .enumerate()
-            .for_each(|(i, event)| event.index = i);
-        self.events = Arc::new(RwLock::new(selected));
-        Dataset::new(rejected)
-    }
-
-    pub fn reject(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
-        self.select(|event| !query(event))
-    }
-
-    pub fn split(
-        mut self,
-        variable: impl Fn(&Event) -> f64 + Sync + Send,
-        range: (f64, f64),
-        nbins: usize,
-    ) -> (Vec<Dataset>, Dataset, Dataset) {
-        let mut bins: Vec<f64> = Vec::with_capacity(nbins + 1);
-        let width = (range.1 - range.0) / nbins as f64;
-        for m in 0..=nbins {
-            bins.push(range.0 + width * m as f64);
-        }
-        let mut out: Vec<Dataset> = Vec::with_capacity(nbins);
-        let underflow: Dataset = self.reject(|event: &Event| variable(event) < bins[0]);
-        let overflow: Dataset = self.reject(|event: &Event| variable(event) > bins[bins.len() - 1]);
-        // now the ends are trimmed off of self
-        bins.into_iter().skip(1).for_each(|ub| {
-            let bin_contents = self.reject(|event| variable(event) < ub);
-            out.push(bin_contents);
-        });
-        (out, underflow, overflow)
-    }
-
+    #[staticmethod]
     pub fn from_parquet(path: &str) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
@@ -547,6 +500,8 @@ impl Dataset {
                 .collect(),
         )
     }
+
+    #[staticmethod]
     pub fn from_parquet_eps_in_beam(path: &str) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
@@ -559,18 +514,23 @@ impl Dataset {
                 .collect(),
         )
     }
-    pub fn from_parquet_with_eps(path: &str, eps: Vector3<f64>) -> Dataset {
+
+    #[staticmethod]
+    pub fn from_parquet_with_eps(path: &str, eps: Vec<f64>) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
         let reader = SerializedFileReader::new(file).unwrap();
         let row_iter = reader.get_row_iter(None).unwrap();
+        let eps_vec = Vector3::from_vec(eps);
         Dataset::new(
             row_iter
                 .enumerate()
-                .map(|(i, row)| Event::read_parquet_row_with_eps(i, row.unwrap(), eps))
+                .map(|(i, row)| Event::read_parquet_row_with_eps(i, row.unwrap(), eps_vec))
                 .collect(),
         )
     }
+
+    #[staticmethod]
     pub fn from_parquet_unpolarized(path: &str) -> Dataset {
         let path = Path::new(path);
         let file = File::open(path).unwrap();
@@ -583,6 +543,8 @@ impl Dataset {
                 .collect(),
         )
     }
+
+    #[staticmethod]
     pub fn from_root(path: &str) -> Dataset {
         let ttree = RootFile::open(path).unwrap().get_tree("kin").unwrap(); // TODO:
         let weight: Vec<f64> = ttree
@@ -670,6 +632,63 @@ impl Dataset {
                 )
                 .collect(),
         )
+    }
+}
+
+impl Dataset {
+    pub fn new(events: Vec<Event>) -> Self {
+        Dataset {
+            events: Arc::new(RwLock::new(events)),
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.events.read().is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.events.read().len()
+    }
+
+    pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
+        let (mut selected, mut rejected): (Vec<_>, Vec<_>) =
+            self.events.write().par_drain(..).partition(query);
+        selected
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, event)| event.index = i);
+        rejected
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(i, event)| event.index = i);
+        self.events = Arc::new(RwLock::new(selected));
+        Dataset::new(rejected)
+    }
+
+    pub fn reject(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> Dataset {
+        self.select(|event| !query(event))
+    }
+
+    pub fn split(
+        mut self,
+        variable: impl Fn(&Event) -> f64 + Sync + Send,
+        range: (f64, f64),
+        nbins: usize,
+    ) -> (Vec<Dataset>, Dataset, Dataset) {
+        let mut bins: Vec<f64> = Vec::with_capacity(nbins + 1);
+        let width = (range.1 - range.0) / nbins as f64;
+        for m in 0..=nbins {
+            bins.push(range.0 + width * m as f64);
+        }
+        let mut out: Vec<Dataset> = Vec::with_capacity(nbins);
+        let underflow: Dataset = self.reject(|event: &Event| variable(event) < bins[0]);
+        let overflow: Dataset = self.reject(|event: &Event| variable(event) > bins[bins.len() - 1]);
+        // now the ends are trimmed off of self
+        bins.into_iter().skip(1).for_each(|ub| {
+            let bin_contents = self.reject(|event| variable(event) < ub);
+            out.push(bin_contents);
+        });
+        (out, underflow, overflow)
     }
 }
 
