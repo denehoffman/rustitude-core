@@ -624,20 +624,23 @@ impl Manage for Manager {
         let index_2 = parameter_2.get_index();
         self.apply_to_parameters(|parameter| {
             let par_index = parameter.get_index();
+            let mut num_constrained = 0;
             if index_1 > index_2 {
                 if par_index == index_1 {
-                    *parameter = parameter_2.clone();
+                    parameter.set_index(index_2);
+                    num_constrained += 1;
                 }
                 if par_index > index_1 {
-                    parameter.decrement();
+                    parameter.set_index(par_index - num_constrained);
                 }
             }
             if index_1 < index_2 {
                 if par_index == index_2 {
-                    *parameter = parameter_1.clone();
+                    parameter.set_index(index_1);
+                    num_constrained += 1;
                 }
                 if par_index > index_2 {
-                    parameter.decrement();
+                    parameter.set_index(par_index - num_constrained);
                 }
             }
         });
