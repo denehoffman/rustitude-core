@@ -386,7 +386,7 @@ impl Dataset {
     pub fn split_m(
         &self,
         range: (f64, f64),
-        nbins: usize,
+        bins: usize,
         p1: Option<Vec<usize>>,
         p2: Option<Vec<usize>>,
     ) -> (Vec<Dataset>, Dataset, Dataset) {
@@ -405,7 +405,7 @@ impl Dataset {
                 .sum::<FourMomentum>();
             (p1_p4 + p2_p4).m()
         };
-        self.clone().split(mass, range, nbins) // TODO: fix clone here eventually
+        self.clone().split(mass, range, bins) // TODO: fix clone here eventually
     }
 
     #[staticmethod]
