@@ -180,7 +180,7 @@ type AmplitudeID<'a> = (&'a str, &'a str, &'a str);
 type ParameterID<'a> = (&'a str, &'a str, &'a str, &'a str);
 
 pub trait Manage {
-    fn parameters(&self) -> Vec<Parameter>;
+    fn parameters(&self, fixed: bool, constrained: bool) -> Vec<Parameter>;
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude);
     fn precompute(&mut self);
     fn constrain(&mut self, parameter_1: ParameterID, parameter_2: ParameterID);
@@ -191,14 +191,23 @@ pub trait Manage {
     fn free(&mut self, parameter: ParameterID, initial_value: f64);
     fn set_bounds(&mut self, parameter: ParameterID, lower_bound: f64, upper_bound: f64);
     fn set_initial(&mut self, parameter: ParameterID, initial_value: f64);
-    fn get_lower_bounds(&self) -> Vec<f64> {
-        self.parameters().iter().map(|p| p.lower_bound).collect()
+    fn get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.parameters(fixed, constrained)
+            .iter()
+            .map(|p| p.lower_bound)
+            .collect()
     }
-    fn get_upper_bounds(&self) -> Vec<f64> {
-        self.parameters().iter().map(|p| p.upper_bound).collect()
+    fn get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.parameters(fixed, constrained)
+            .iter()
+            .map(|p| p.upper_bound)
+            .collect()
     }
-    fn get_initial_values(&self) -> Vec<f64> {
-        self.parameters().iter().map(|p| p.initial_value).collect()
+    fn get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.parameters(fixed, constrained)
+            .iter()
+            .map(|p| p.initial_value)
+            .collect()
     }
 }
 
@@ -345,31 +354,27 @@ impl Manager {
         );
     }
     #[pyo3(name = "get_lower_bounds")]
-    fn py_get_lower_bounds(&self) -> Vec<f64> {
-        self.get_lower_bounds()
+    fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_lower_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_upper_bounds")]
-    fn py_get_upper_bounds(&self) -> Vec<f64> {
-        self.get_upper_bounds()
+    fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_upper_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self) -> Vec<f64> {
-        self.get_initial_values()
+    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial_values(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false))]
-    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
-        if fixed {
-            self.parameters()
-                .into_iter()
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        } else {
-            self.parameters()
-                .into_iter()
-                .filter(|p| !p.is_fixed())
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        }
+    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    fn py_parameters(
+        &self,
+        fixed: bool,
+        constrained: bool,
+    ) -> Vec<(String, String, String, String)> {
+        self.parameters(fixed, constrained)
+            .into_iter()
+            .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+            .collect()
     }
 }
 
@@ -479,13 +484,24 @@ impl Manager {
     }
 }
 impl Manage for Manager {
-    fn parameters(&self) -> Vec<Parameter> {
+    fn parameters(&self, fixed: bool, constrained: bool) -> Vec<Parameter> {
         let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
+        let highest_index = 0;
         for (_, sum) in self.pars.iter() {
             for (_, group) in sum.iter() {
                 for (_, amplitude) in group.iter() {
                     for (_, parameter) in amplitude.iter() {
-                        output.push(parameter.clone());
+                        if parameter.is_fixed() {
+                            if fixed {
+                                output.push(parameter.clone())
+                            }
+                        } else if parameter.get_index() <= highest_index {
+                            if constrained {
+                                output.push(parameter.clone())
+                            }
+                        } else {
+                            output.push(parameter.clone())
+                        }
                     }
                 }
             }
@@ -800,31 +816,27 @@ impl MultiManager {
         );
     }
     #[pyo3(name = "get_lower_bounds")]
-    fn py_get_lower_bounds(&self) -> Vec<f64> {
-        self.get_lower_bounds()
+    fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_lower_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_upper_bounds")]
-    fn py_get_upper_bounds(&self) -> Vec<f64> {
-        self.get_upper_bounds()
+    fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_upper_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self) -> Vec<f64> {
-        self.get_initial_values()
+    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial_values(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false))]
-    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
-        if fixed {
-            self.parameters()
-                .into_iter()
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        } else {
-            self.parameters()
-                .into_iter()
-                .filter(|p| !p.is_fixed())
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        }
+    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    fn py_parameters(
+        &self,
+        fixed: bool,
+        constrained: bool,
+    ) -> Vec<(String, String, String, String)> {
+        self.parameters(fixed, constrained)
+            .into_iter()
+            .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+            .collect()
     }
 }
 impl MultiManager {
@@ -835,8 +847,8 @@ impl MultiManager {
     }
 }
 impl Manage for MultiManager {
-    fn parameters(&self) -> Vec<Parameter> {
-        self.managers[0].parameters()
+    fn parameters(&self, fixed: bool, constrained: bool) -> Vec<Parameter> {
+        self.managers[0].parameters(fixed, constrained)
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
         self.managers.iter_mut().for_each(|manager| {
@@ -1013,36 +1025,32 @@ impl ExtendedLogLikelihood {
         );
     }
     #[pyo3(name = "get_lower_bounds")]
-    fn py_get_lower_bounds(&self) -> Vec<f64> {
-        self.get_lower_bounds()
+    fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_lower_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_upper_bounds")]
-    fn py_get_upper_bounds(&self) -> Vec<f64> {
-        self.get_upper_bounds()
+    fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_upper_bounds(fixed, constrained)
     }
     #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self) -> Vec<f64> {
-        self.get_initial_values()
+    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial_values(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false))]
-    fn py_parameters(&self, fixed: bool) -> Vec<(String, String, String, String)> {
-        if fixed {
-            self.parameters()
-                .into_iter()
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        } else {
-            self.parameters()
-                .into_iter()
-                .filter(|p| !p.is_fixed())
-                .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
-                .collect()
-        }
+    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    fn py_parameters(
+        &self,
+        fixed: bool,
+        constrained: bool,
+    ) -> Vec<(String, String, String, String)> {
+        self.parameters(fixed, constrained)
+            .into_iter()
+            .map(|p| (p.get_sum(), p.get_group(), p.get_amplitude(), p.get_name()))
+            .collect()
     }
 }
 impl Manage for ExtendedLogLikelihood {
-    fn parameters(&self) -> Vec<Parameter> {
-        self.manager.parameters()
+    fn parameters(&self, fixed: bool, constrained: bool) -> Vec<Parameter> {
+        self.manager.parameters(fixed, constrained)
     }
     fn register(&mut self, sum_name: &str, group_name: &str, amplitude: &Amplitude) {
         self.manager.register(sum_name, group_name, amplitude);
