@@ -267,6 +267,12 @@ impl Manager {
     }
     #[pyo3(name = "__call__")]
     pub fn compute(&self, parameters: Vec<f64>) -> Vec<f64> {
+        assert!(
+            parameters.len() == self.parameters(false, false).len(),
+            "Incorrect number of input parameters, expected {}, found {}",
+            self.parameters(false, false).len(),
+            parameters.len()
+        );
         self.data
             .events
             .read()
@@ -929,7 +935,6 @@ impl ExtendedLogLikelihood {
     }
     #[pyo3(name = "__call__")]
     pub fn compute(&self, parameters: Vec<f64>) -> f64 {
-        // assert!(parameters.len() == self.parameters().iter().filter(|p| ???))
         let data_result: f64 = self.manager.managers[0]
             .compute(parameters.to_vec())
             .iter()
