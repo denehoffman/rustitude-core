@@ -486,21 +486,22 @@ impl Manager {
 impl Manage for Manager {
     fn parameters(&self, fixed: bool, constrained: bool) -> Vec<Parameter> {
         let mut output: Vec<Parameter> = Vec::with_capacity(self.variable_count);
-        let highest_index = 0;
+        let mut used_indices = vec![];
         for (_, sum) in self.pars.iter() {
             for (_, group) in sum.iter() {
                 for (_, amplitude) in group.iter() {
                     for (_, parameter) in amplitude.iter() {
                         if parameter.is_fixed() {
                             if fixed {
-                                output.push(parameter.clone())
+                                output.push(parameter.clone());
                             }
-                        } else if parameter.get_index() <= highest_index {
+                        } else if used_indices.contains(&parameter.get_index()) {
                             if constrained {
-                                output.push(parameter.clone())
+                                output.push(parameter.clone());
                             }
                         } else {
-                            output.push(parameter.clone())
+                            output.push(parameter.clone());
+                            used_indices.push(parameter.get_index());
                         }
                     }
                 }
