@@ -5,7 +5,77 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.4 (2024-05-06)
+
+### Documentation
+
+ - <csr-id-54a9908a5fb203b828787ae8ca21d628a8da485b/> Update README.md
+ - <csr-id-3d22a8634bc81d6cb21049d60ada5836a7d03678/> Update README.md
+
+### New Features
+
+ - <csr-id-f05877659fada6fa62d5307a352b4c8af781460e/> add Piecewise to prelude
+ - <csr-id-effffcfa708cdd7267c6962bebc769064a979b82/> add Piecewise amplitude
+   Additionally adds a method to use the piecewise amplitude over resonance mass: PiecewiseM
+ - <csr-id-8675299aa0bc0dc0ea491f05ab8cc6ad22d8bf38/> add assert for compute to check if the proper number of parameters is inputed
+ - <csr-id-1ae2cbcc4aa3a9a73572a0bc1e07065c198641dc/> add fixed and constrained flags to parameters
+ - <csr-id-da32d6311d37c3f4ffbd0a02726e83efec8f25cc/> move Dataset constructors into pymethods, add options for no weights or eps in from_dict
+
+### Bug Fixes
+
+ - <csr-id-d793c7cb84c7e586cef301a9310c8d931827986e/> correct spelling
+ - <csr-id-6ec195da90bb9b871b3bf3c4048b88aac0175eac/> add list of used indices to hopefully ensure constrained parameters are only returned by parameters if the flag is true
+ - <csr-id-ea15b3280e198ef38b68a53d8499618cfd43850d/> set indices rather than setting parameters, this fixes a kind of major bug where constraining just made duplicates
+ - <csr-id-1b2765a7e3c85744bab7472555b9b0348d2a7e3d/> change module implementation
+ - <csr-id-1f0ad57bbf5199d6923755f811744472947340b1/> make sure submodules are called
+ - <csr-id-5c47e5cf301a5d6c58a359d0b4afaead678de2b5/> make amplitude, four_momentum, and manager #[pymodule]s
+ - <csr-id-b9c6d51bb54d8f962a6d8e7507e42c9676f84a99/> make dataset a #[pymodule], hopefully this resolves import issues
+
+### Other
+
+ - <csr-id-2137d6ed155df261e70f9905c6400a9fdcfade35/> update Cargo.lock
+
+### Style
+
+ - <csr-id-ce7f083ef0d38e53d6b2ebfe8382c9ed52146713/> change nbins to bins to match numpy and matplotlib
+
+### Commit Statistics
+
+<csr-read-only-do-not-edit/>
+
+ - 16 commits contributed to the release over the course of 3 calendar days.
+ - 4 days passed between releases.
+ - 16 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 0 issues like '(#ID)' were seen in commit messages
+
+### Commit Details
+
+<csr-read-only-do-not-edit/>
+
+<details><summary>view details</summary>
+
+ * **Uncategorized**
+    - Update Cargo.lock ([`2137d6e`](https://github.com/denehoffman/rustitude-core/commit/2137d6ed155df261e70f9905c6400a9fdcfade35))
+    - Add Piecewise to prelude ([`f058776`](https://github.com/denehoffman/rustitude-core/commit/f05877659fada6fa62d5307a352b4c8af781460e))
+    - Correct spelling ([`d793c7c`](https://github.com/denehoffman/rustitude-core/commit/d793c7cb84c7e586cef301a9310c8d931827986e))
+    - Add Piecewise amplitude ([`effffcf`](https://github.com/denehoffman/rustitude-core/commit/effffcfa708cdd7267c6962bebc769064a979b82))
+    - Update README.md ([`54a9908`](https://github.com/denehoffman/rustitude-core/commit/54a9908a5fb203b828787ae8ca21d628a8da485b))
+    - Update README.md ([`3d22a86`](https://github.com/denehoffman/rustitude-core/commit/3d22a8634bc81d6cb21049d60ada5836a7d03678))
+    - Add assert for compute to check if the proper number of parameters is inputed ([`8675299`](https://github.com/denehoffman/rustitude-core/commit/8675299aa0bc0dc0ea491f05ab8cc6ad22d8bf38))
+    - Add list of used indices to hopefully ensure constrained parameters are only returned by parameters if the flag is true ([`6ec195d`](https://github.com/denehoffman/rustitude-core/commit/6ec195da90bb9b871b3bf3c4048b88aac0175eac))
+    - Add fixed and constrained flags to parameters ([`1ae2cbc`](https://github.com/denehoffman/rustitude-core/commit/1ae2cbcc4aa3a9a73572a0bc1e07065c198641dc))
+    - Set indices rather than setting parameters, this fixes a kind of major bug where constraining just made duplicates ([`ea15b32`](https://github.com/denehoffman/rustitude-core/commit/ea15b3280e198ef38b68a53d8499618cfd43850d))
+    - Change nbins to bins to match numpy and matplotlib ([`ce7f083`](https://github.com/denehoffman/rustitude-core/commit/ce7f083ef0d38e53d6b2ebfe8382c9ed52146713))
+    - Move Dataset constructors into pymethods, add options for no weights or eps in from_dict ([`da32d63`](https://github.com/denehoffman/rustitude-core/commit/da32d6311d37c3f4ffbd0a02726e83efec8f25cc))
+    - Change module implementation ([`1b2765a`](https://github.com/denehoffman/rustitude-core/commit/1b2765a7e3c85744bab7472555b9b0348d2a7e3d))
+    - Make sure submodules are called ([`1f0ad57`](https://github.com/denehoffman/rustitude-core/commit/1f0ad57bbf5199d6923755f811744472947340b1))
+    - Make amplitude, four_momentum, and manager #[pymodule]s ([`5c47e5c`](https://github.com/denehoffman/rustitude-core/commit/5c47e5cf301a5d6c58a359d0b4afaead678de2b5))
+    - Make dataset a #[pymodule], hopefully this resolves import issues ([`b9c6d51`](https://github.com/denehoffman/rustitude-core/commit/b9c6d51bb54d8f962a6d8e7507e42c9676f84a99))
+</details>
+
 ## 0.3.3 (2024-05-02)
+
+<csr-id-a257aace868fb14b062eb9ac2b502a1416c7cab6/>
 
 ### Chore
 
@@ -25,7 +95,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 6 commits contributed to the release over the course of 3 calendar days.
+ - 7 commits contributed to the release over the course of 3 calendar days.
  - 3 days passed between releases.
  - 5 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
@@ -37,6 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
+    - Release rustitude-core v0.3.3 ([`f35d785`](https://github.com/denehoffman/rustitude-core/commit/f35d785ac58b4266a308b8c9ea85f57ce476bf43))
     - Correct the module name for amplitude from dataset (typo) ([`be2c1f1`](https://github.com/denehoffman/rustitude-core/commit/be2c1f1bc9928d1674120260ced3cb2d4b107370))
     - Add pyo3 bindings to all main modules ([`baf71d0`](https://github.com/denehoffman/rustitude-core/commit/baf71d09652b2140400013f821cfe40bfa7ef73d))
     - Implement Clone for Event ([`ceac972`](https://github.com/denehoffman/rustitude-core/commit/ceac972d1235d434d5f36ef83402e772f3e9fbc5))
@@ -53,12 +124,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
  - <csr-id-8d9ec2e806f7d6f47413377e7d1ff92fa8819802/> version bump
 
+### Style
+
+ - <csr-id-ba2e0b7750188d5d837ea32d03a4bdbea157819d/> added AmplitudeID and ParameterID types to simplify Manage functions
+
+### Reverted
+
+ - <csr-id-dd8e9a557f461c3403f757161e5b81ba724ec5d9/> remove unused packages and files, remove pyo3 bindings for future crate
+ - <csr-id-7159f771aea4932e4f24edaace03b53fa4ceebbe/> rename crate to rustitude-core in preparation for restructuring
+ - <csr-id-df1084e43f987c985a38d0558202d2089b18da3e/> move ArcLocks into Amplitude to enable better PyO3 integration, this also means less &mut selfs and no need for macros for scalar-like Amplitudes
+ - <csr-id-b833b07a63f99f048832fa9b2f18176d830c00dc/> remove some iter methods from Dataset and make it store an Arc to allow Manager to have no lifetime annotations
+ - <csr-id-d915bbbfb88d52cb03ea8d89120105f197e0288d/> remove gomez support
+
+### Bug Fixes
+
+ - <csr-id-ad26a016702f345cfca364ec1410ff1d9b218cd8/> fix docs
+ - <csr-id-a1627283a98fdbdb2cd70cad5428d6ec02119ef9/> fix more tests
+ - <csr-id-5f3e4f4a2b18bcb315de99918ae0d5b7d8420ab9/> fix tests with renamed lib
+ - <csr-id-783f6eda92fc4ce180e1d8081594394abbcad6f1/> forgot to add required crates for ROOT file reading
+ - <csr-id-47c3d0886f86f2ae8f6b652511181cf835038330/> ensured convert gets the correct tree name for writing
+ - <csr-id-b15712bdbb77222f78b55039bb3f4c3b278e986f/> fix doctests in amplitude.rs
+ - <csr-id-d33c869c8167711453d4072535a711442099c556/> parking_lot::RwLocks don't need to be unwrapped
+
+### New Features
+
+ - <csr-id-2b950bbd0fa6e28365dd6fc6df7236d60c857347/> add pyo3 bindings to four_momentum
+ - <csr-id-fe918b06885d84c71c55038f9b7667edb238e643/> add bounds and initial values to parameters
+ - <csr-id-ddb3c08b8c0ea41c80cb5ab3cd647aeb0ff4e0b7/> add prelim ROOT file reading and ways to split datasets
+ - <csr-id-319bac9d4b70a18ca6fd9b43bc4f8d48598d21d9/> add bounds to Problem impl for Managers
+ - <csr-id-8ae63ca712d3c8ee8954035de09b549e44c0c6bd/> add bounds and initial values to Parameters
+ - <csr-id-294c5e4c66694a39f5b2a6d90d68d2acedd17208/> switch to parking_lot::RwLock
+ - <csr-id-31de0d8595fd3d1c94f69dd6b2370ac09a731f44/> add amplitude::PolarComplexScalar
+
 ### Commit Statistics
 
 <csr-read-only-do-not-edit/>
 
- - 2 commits contributed to the release.
- - 1 commit was understood as [conventional](https://www.conventionalcommits.org).
+ - 25 commits contributed to the release over the course of 19 calendar days.
+ - 19 days passed between releases.
+ - 21 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
@@ -70,9 +174,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
  * **Uncategorized**
     - Release rustitude-core v0.3.2 ([`4f5bbd5`](https://github.com/denehoffman/rustitude-core/commit/4f5bbd5d259affd3d3e85218ec76bd91a76ee479))
     - Version bump ([`8d9ec2e`](https://github.com/denehoffman/rustitude-core/commit/8d9ec2e806f7d6f47413377e7d1ff92fa8819802))
+    - Release rustitude-core v0.3.1 ([`1b6436c`](https://github.com/denehoffman/rustitude-core/commit/1b6436c869266a7cb19b9f98699a11bd353f12d8))
+    - Fix docs ([`ad26a01`](https://github.com/denehoffman/rustitude-core/commit/ad26a016702f345cfca364ec1410ff1d9b218cd8))
+    - Fix more tests ([`a162728`](https://github.com/denehoffman/rustitude-core/commit/a1627283a98fdbdb2cd70cad5428d6ec02119ef9))
+    - Fix tests with renamed lib ([`5f3e4f4`](https://github.com/denehoffman/rustitude-core/commit/5f3e4f4a2b18bcb315de99918ae0d5b7d8420ab9))
+    - Merge pull request #5 from denehoffman/pyo3_bindings ([`5f6f246`](https://github.com/denehoffman/rustitude-core/commit/5f6f24627e60dd35861049d6f7ef47c634830caa))
+    - Remove unused packages and files, remove pyo3 bindings for future crate ([`dd8e9a5`](https://github.com/denehoffman/rustitude-core/commit/dd8e9a557f461c3403f757161e5b81ba724ec5d9))
+    - Rename crate to rustitude-core in preparation for restructuring ([`7159f77`](https://github.com/denehoffman/rustitude-core/commit/7159f771aea4932e4f24edaace03b53fa4ceebbe))
+    - Move ArcLocks into Amplitude to enable better PyO3 integration, this also means less &mut selfs and no need for macros for scalar-like Amplitudes ([`df1084e`](https://github.com/denehoffman/rustitude-core/commit/df1084e43f987c985a38d0558202d2089b18da3e))
+    - Add pyo3 bindings to four_momentum ([`2b950bb`](https://github.com/denehoffman/rustitude-core/commit/2b950bbd0fa6e28365dd6fc6df7236d60c857347))
+    - Remove some iter methods from Dataset and make it store an Arc to allow Manager to have no lifetime annotations ([`b833b07`](https://github.com/denehoffman/rustitude-core/commit/b833b07a63f99f048832fa9b2f18176d830c00dc))
+    - Remove gomez support ([`d915bbb`](https://github.com/denehoffman/rustitude-core/commit/d915bbbfb88d52cb03ea8d89120105f197e0288d))
+    - Forgot to add required crates for ROOT file reading ([`783f6ed`](https://github.com/denehoffman/rustitude-core/commit/783f6eda92fc4ce180e1d8081594394abbcad6f1))
+    - Add bounds and initial values to parameters ([`fe918b0`](https://github.com/denehoffman/rustitude-core/commit/fe918b06885d84c71c55038f9b7667edb238e643))
+    - Add prelim ROOT file reading and ways to split datasets ([`ddb3c08`](https://github.com/denehoffman/rustitude-core/commit/ddb3c08b8c0ea41c80cb5ab3cd647aeb0ff4e0b7))
+    - Ensured convert gets the correct tree name for writing ([`47c3d08`](https://github.com/denehoffman/rustitude-core/commit/47c3d0886f86f2ae8f6b652511181cf835038330))
+    - Update convert to clean up .root files by default ([`25d7998`](https://github.com/denehoffman/rustitude-core/commit/25d7998aa17dac1e4a66096b7b2cb2ec86e43f0d))
+    - Fix doctests in amplitude.rs ([`b15712b`](https://github.com/denehoffman/rustitude-core/commit/b15712bdbb77222f78b55039bb3f4c3b278e986f))
+    - Add bounds to Problem impl for Managers ([`319bac9`](https://github.com/denehoffman/rustitude-core/commit/319bac9d4b70a18ca6fd9b43bc4f8d48598d21d9))
+    - Added AmplitudeID and ParameterID types to simplify Manage functions ([`ba2e0b7`](https://github.com/denehoffman/rustitude-core/commit/ba2e0b7750188d5d837ea32d03a4bdbea157819d))
+    - Add bounds and initial values to Parameters ([`8ae63ca`](https://github.com/denehoffman/rustitude-core/commit/8ae63ca712d3c8ee8954035de09b549e44c0c6bd))
+    - Parking_lot::RwLocks don't need to be unwrapped ([`d33c869`](https://github.com/denehoffman/rustitude-core/commit/d33c869c8167711453d4072535a711442099c556))
+    - Switch to parking_lot::RwLock ([`294c5e4`](https://github.com/denehoffman/rustitude-core/commit/294c5e4c66694a39f5b2a6d90d68d2acedd17208))
+    - Add amplitude::PolarComplexScalar ([`31de0d8`](https://github.com/denehoffman/rustitude-core/commit/31de0d8595fd3d1c94f69dd6b2370ac09a731f44))
 </details>
 
-## 0.3.1 (2024-04-29)
+## 0.3.1 (2024-04-10)
 
 <csr-id-35fd81ade394522801d288e4a2d084b581d5e5a5/>
 <csr-id-1d91ee9b2928b9761b0568104ea5e8b7841bf24c/>
@@ -154,9 +281,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 <csr-read-only-do-not-edit/>
 
- - 85 commits contributed to the release over the course of 66 calendar days.
- - 86 days passed between releases.
- - 43 commits were understood as [conventional](https://www.conventionalcommits.org).
+ - 62 commits contributed to the release over the course of 46 calendar days.
+ - 67 days passed between releases.
+ - 23 commits were understood as [conventional](https://www.conventionalcommits.org).
  - 0 issues like '(#ID)' were seen in commit messages
 
 ### Commit Details
@@ -166,29 +293,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 <details><summary>view details</summary>
 
  * **Uncategorized**
-    - Release rustitude-core v0.3.1 ([`1b6436c`](https://github.com/denehoffman/rustitude-core/commit/1b6436c869266a7cb19b9f98699a11bd353f12d8))
-    - Fix docs ([`ad26a01`](https://github.com/denehoffman/rustitude-core/commit/ad26a016702f345cfca364ec1410ff1d9b218cd8))
-    - Fix more tests ([`a162728`](https://github.com/denehoffman/rustitude-core/commit/a1627283a98fdbdb2cd70cad5428d6ec02119ef9))
-    - Fix tests with renamed lib ([`5f3e4f4`](https://github.com/denehoffman/rustitude-core/commit/5f3e4f4a2b18bcb315de99918ae0d5b7d8420ab9))
-    - Merge pull request #5 from denehoffman/pyo3_bindings ([`5f6f246`](https://github.com/denehoffman/rustitude-core/commit/5f6f24627e60dd35861049d6f7ef47c634830caa))
-    - Remove unused packages and files, remove pyo3 bindings for future crate ([`dd8e9a5`](https://github.com/denehoffman/rustitude-core/commit/dd8e9a557f461c3403f757161e5b81ba724ec5d9))
-    - Rename crate to rustitude-core in preparation for restructuring ([`7159f77`](https://github.com/denehoffman/rustitude-core/commit/7159f771aea4932e4f24edaace03b53fa4ceebbe))
-    - Move ArcLocks into Amplitude to enable better PyO3 integration, this also means less &mut selfs and no need for macros for scalar-like Amplitudes ([`df1084e`](https://github.com/denehoffman/rustitude-core/commit/df1084e43f987c985a38d0558202d2089b18da3e))
-    - Add pyo3 bindings to four_momentum ([`2b950bb`](https://github.com/denehoffman/rustitude-core/commit/2b950bbd0fa6e28365dd6fc6df7236d60c857347))
-    - Remove some iter methods from Dataset and make it store an Arc to allow Manager to have no lifetime annotations ([`b833b07`](https://github.com/denehoffman/rustitude-core/commit/b833b07a63f99f048832fa9b2f18176d830c00dc))
-    - Remove gomez support ([`d915bbb`](https://github.com/denehoffman/rustitude-core/commit/d915bbbfb88d52cb03ea8d89120105f197e0288d))
-    - Forgot to add required crates for ROOT file reading ([`783f6ed`](https://github.com/denehoffman/rustitude-core/commit/783f6eda92fc4ce180e1d8081594394abbcad6f1))
-    - Add bounds and initial values to parameters ([`fe918b0`](https://github.com/denehoffman/rustitude-core/commit/fe918b06885d84c71c55038f9b7667edb238e643))
-    - Add prelim ROOT file reading and ways to split datasets ([`ddb3c08`](https://github.com/denehoffman/rustitude-core/commit/ddb3c08b8c0ea41c80cb5ab3cd647aeb0ff4e0b7))
-    - Ensured convert gets the correct tree name for writing ([`47c3d08`](https://github.com/denehoffman/rustitude-core/commit/47c3d0886f86f2ae8f6b652511181cf835038330))
-    - Update convert to clean up .root files by default ([`25d7998`](https://github.com/denehoffman/rustitude-core/commit/25d7998aa17dac1e4a66096b7b2cb2ec86e43f0d))
-    - Fix doctests in amplitude.rs ([`b15712b`](https://github.com/denehoffman/rustitude-core/commit/b15712bdbb77222f78b55039bb3f4c3b278e986f))
-    - Add bounds to Problem impl for Managers ([`319bac9`](https://github.com/denehoffman/rustitude-core/commit/319bac9d4b70a18ca6fd9b43bc4f8d48598d21d9))
-    - Added AmplitudeID and ParameterID types to simplify Manage functions ([`ba2e0b7`](https://github.com/denehoffman/rustitude-core/commit/ba2e0b7750188d5d837ea32d03a4bdbea157819d))
-    - Add bounds and initial values to Parameters ([`8ae63ca`](https://github.com/denehoffman/rustitude-core/commit/8ae63ca712d3c8ee8954035de09b549e44c0c6bd))
-    - Parking_lot::RwLocks don't need to be unwrapped ([`d33c869`](https://github.com/denehoffman/rustitude-core/commit/d33c869c8167711453d4072535a711442099c556))
-    - Switch to parking_lot::RwLock ([`294c5e4`](https://github.com/denehoffman/rustitude-core/commit/294c5e4c66694a39f5b2a6d90d68d2acedd17208))
-    - Add amplitude::PolarComplexScalar ([`31de0d8`](https://github.com/denehoffman/rustitude-core/commit/31de0d8595fd3d1c94f69dd6b2370ac09a731f44))
     - Release rustitude v0.3.1 ([`54efefe`](https://github.com/denehoffman/rustitude-core/commit/54efefe447a0d00b4da366a4fb3198662f4c6cc7))
     - Update README.md ([`32fb835`](https://github.com/denehoffman/rustitude-core/commit/32fb8351ee7fa4d1b8883391f3360a63a643497d))
     - Add pretty printing to Parameter struct ([`bf655e4`](https://github.com/denehoffman/rustitude-core/commit/bf655e45feab393115b52ac711d4e9d3d487e799))

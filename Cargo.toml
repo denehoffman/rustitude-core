@@ -1,6 +1,6 @@
 [package]
 name = "rustitude-core"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 authors = ["Nathaniel Dene Hoffman <dene@cmu.edu>"]
 description = "A library to create and operate models for particle physics amplitude analyses"
