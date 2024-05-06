@@ -25,6 +25,8 @@
 - [Overview](#Overview)
 - [Installation](#Installation)
 - [Usage](#Usage)
+- [Implementing an Amplitude](#Implementing-an-Amplitude)
+  - [Python Bindings](#Python-Bindings)
 - [TODOs](#TODOs)
 
 # Overview
@@ -143,7 +145,7 @@ Finally, the `parameters` function just returns a list of the parameter names in
 
 And that's it! However, it is important to be aware of the steps which need to be taken to allow this amplitude to be used through the Python interface.
 
-## Python bindings
+## Python Bindings
 To make Python bindings, `pyo3` needs to be included as a dependency:
 
 ```rust
