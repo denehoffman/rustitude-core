@@ -1,6 +1,7 @@
 use num::complex::Complex64;
 use parking_lot::RwLock;
 use pyo3::prelude::*;
+use rayon::prelude::*;
 use std::{fmt::Debug, sync::Arc};
 
 use crate::dataset::{Dataset, Event};
@@ -247,6 +248,26 @@ impl Amplitude {
     }
 }
 
+/// A [`Node`] for computing a single scalar value from an input parameter.
+///
+/// This struct implements [`Node`] to generate a single new parameter called `value`.
+///
+/// # Parameters:
+///
+/// - `value`: The value of the scalar.
+pub struct Scalar;
+impl Node for Scalar {
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec!["value".to_string()])
+    }
+
+    fn precalculate(&mut self, _dataset: &Dataset) {}
+
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
+        Complex64::new(parameters[0], 0.0)
+    }
+}
+
 #[pyfunction]
 pub fn scalar(name: &str) -> Amplitude {
     //! Creates a named [`Scalar`].
@@ -267,6 +288,27 @@ pub fn scalar(name: &str) -> Amplitude {
         name: name.to_string(),
         node: Arc::new(RwLock::new(Box::new(Scalar))),
     }
+}
+/// A [`Node`] for computing a single complex value from two input parameters.
+///
+/// This struct implements [`Node`] to generate a complex value from two input parameters called
+/// `real` and `imag`.
+///
+/// # Parameters:
+///
+/// - `real`: The real part of the complex scalar.
+/// - `imag`: The imaginary part of the complex scalar.
+pub struct ComplexScalar;
+impl Node for ComplexScalar {
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
+        Complex64::new(parameters[0], parameters[1])
+    }
+
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(vec!["real".to_string(), "imag".to_string()])
+    }
+
+    fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
 #[pyfunction]
@@ -291,70 +333,6 @@ pub fn cscalar(name: &str) -> Amplitude {
     }
 }
 
-#[pyfunction]
-pub fn pcscalar(name: &str) -> Amplitude {
-    //! Creates a named [`PolarComplexScalar`].
-    //!
-    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-    //! value determined by two parameters, `real` and `imag`.
-    //!
-    //! # Examples
-    //!
-    //! Basic usage:
-    //!
-    //! ```
-    //! use rustitude_core::prelude::*;
-    //! let my_pcscalar = pcscalar("MyPolarComplexScalar");
-    //! assert_eq!(my_pcscalar.node.read().parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
-    //! ```
-    Amplitude {
-        name: name.to_string(),
-        node: Arc::new(RwLock::new(Box::new(PolarComplexScalar))),
-    }
-}
-
-/// A [`Node`] for computing a single scalar value from an input parameter.
-///
-/// This struct implements [`Node`] to generate a single new parameter called `value`.
-///
-/// # Parameters:
-///
-/// - `value`: The value of the scalar.
-pub struct Scalar;
-impl Node for Scalar {
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["value".to_string()])
-    }
-
-    fn precalculate(&mut self, _dataset: &Dataset) {}
-
-    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-        Complex64::new(parameters[0], 0.0)
-    }
-}
-
-/// A [`Node`] for computing a single complex value from two input parameters.
-///
-/// This struct implements [`Node`] to generate a complex value from two input parameters called
-/// `real` and `imag`.
-///
-/// # Parameters:
-///
-/// - `real`: The real part of the complex scalar.
-/// - `imag`: The imaginary part of the complex scalar.
-pub struct ComplexScalar;
-impl Node for ComplexScalar {
-    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-        Complex64::new(parameters[0], parameters[1])
-    }
-
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["real".to_string(), "imag".to_string()])
-    }
-
-    fn precalculate(&mut self, _dataset: &Dataset) {}
-}
-
 /// A [`Node`] for computing a single complex value from two input parameters in polar form.
 ///
 /// This struct implements [`Node`] to generate a complex value from two input parameters called
@@ -377,10 +355,104 @@ impl Node for PolarComplexScalar {
     fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
+pub struct Piecewise<F>
+where
+    F: Fn(&Event) -> f64 + Send + Sync + Copy,
+{
+    edges: Vec<(f64, f64)>,
+    variable: F,
+    calculated_variable: Vec<f64>,
+}
+
+#[pyfunction]
+pub fn pcscalar(name: &str) -> Amplitude {
+    //! Creates a named [`PolarComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`.
+    //!
+    //! # Examples
+    //!
+    //! Basic usage:
+    //!
+    //! ```
+    //! use rustitude_core::prelude::*;
+    //! let my_pcscalar = pcscalar("MyPolarComplexScalar");
+    //! assert_eq!(my_pcscalar.node.read().parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
+    //! ```
+    Amplitude {
+        name: name.to_string(),
+        node: Arc::new(RwLock::new(Box::new(PolarComplexScalar))),
+    }
+}
+
+impl<F> Piecewise<F>
+where
+    F: Fn(&Event) -> f64 + Send + Sync + Copy,
+{
+    pub fn new(bins: usize, range: (f64, f64), variable: F) -> Self {
+        let diff = (range.1 - range.0) / (bins as f64);
+        let edges = (0..bins)
+            .map(|i| (range.0 + i as f64 * diff, range.0 + (i + 1) as f64 * diff))
+            .collect();
+        Self {
+            edges,
+            variable,
+            calculated_variable: Vec::default(),
+        }
+    }
+}
+
+impl<F> Node for Piecewise<F>
+where
+    F: Fn(&Event) -> f64 + Send + Sync + Copy,
+{
+    fn precalculate(&mut self, dataset: &Dataset) {
+        self.calculated_variable = dataset
+            .events
+            .read()
+            .par_iter()
+            .map(self.variable)
+            .collect();
+    }
+
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+        let val = self.calculated_variable[event.index];
+        let opt_i_bin = self.edges.iter().position(|&(l, r)| val >= l && val <= r);
+        if let Some(i_bin) = opt_i_bin {
+            Complex64::new(parameters[i_bin * 2], parameters[(i_bin * 2) + 1])
+        } else {
+            Complex64::default()
+        }
+    }
+
+    fn parameters(&self) -> Option<Vec<String>> {
+        Some(
+            (0..self.edges.len())
+                .flat_map(|i| vec![format!("bin {} re", i), format!("bin {} im", i)])
+                .collect(),
+        )
+    }
+}
+
+#[pyfunction(name = "PiecewiseM")]
+pub fn piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> Amplitude {
+    //! Creates a named [`Piecewise`] amplitude with the resonance mass as the binning variable.
+    Amplitude {
+        name: name.to_string(),
+        node: Arc::new(RwLock::new(Box::new(Piecewise::new(
+            bins,
+            range,
+            |e: &Event| (e.daughter_p4s[0] + e.daughter_p4s[1]).m(),
+        )))),
+    }
+}
+
 pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Amplitude>()?;
     m.add_function(wrap_pyfunction!(scalar, m)?)?;
     m.add_function(wrap_pyfunction!(cscalar, m)?)?;
     m.add_function(wrap_pyfunction!(pcscalar, m)?)?;
+    m.add_function(wrap_pyfunction!(piecewise_m, m)?)?;
     Ok(())
 }
