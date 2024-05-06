@@ -48,14 +48,14 @@ Cargo provides the usual command for including this crate in a project:
 ```shell
 cargo add rustitude-core
 ```
-However, this project is best-used with some premade amplitudes (see [`rustitude-gluex`](https://github.com/denehoffman/rustitude-gluex/), and these come bundled with the [`rustitude`](https://github.com/denehoffman/rustitude/) meta-crate, which also re-exports this crate's prelude. This can be installed via the same command:
+However, this project is best-used with some pre-made amplitudes (see [`rustitude-gluex`](https://github.com/denehoffman/rustitude-gluex/), and these come bundled with the [`rustitude`](https://github.com/denehoffman/rustitude/) meta-crate, which also re-exports this crate's prelude. This can be installed via the same command:
 ```shell
 cargo add rustitude
 ```
 
 # Implementing an Amplitude
 
-While typical usage might be to use premade amplitudes in various combinations, it is important to know how to design an amplitude which will work seamlessly with this crate. Let's write down the `rustitude` version of the [OmegaDalitz](https://github.com/JeffersonLab/halld_sim/blob/6544f01ac1514b0b9a53ad241cf2e8a63e1d3dfa/src/libraries/AMPTOOLS_AMPS/OmegaDalitz.cc) amplitude:
+While typical usage might be to use pre-made amplitudes in various combinations, it is important to know how to design an amplitude which will work seamlessly with this crate. Let's write down the `rustitude` version of the [OmegaDalitz](https://github.com/JeffersonLab/halld_sim/blob/6544f01ac1514b0b9a53ad241cf2e8a63e1d3dfa/src/libraries/AMPTOOLS_AMPS/OmegaDalitz.cc) amplitude:
 
 ```rust
 use rayon::prelude::*;
