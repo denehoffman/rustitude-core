@@ -203,7 +203,13 @@ pub trait Manage {
             .map(|p| p.upper_bound)
             .collect()
     }
-    fn get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+    fn get_bounds(&self, fixed: bool, constrained: bool) -> Vec<(f64, f64)> {
+        self.parameters(fixed, constrained)
+            .iter()
+            .map(|p| p.get_bounds())
+            .collect()
+    }
+    fn get_initial(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.parameters(fixed, constrained)
             .iter()
             .map(|p| p.initial_value)
@@ -359,19 +365,23 @@ impl Manager {
             initial_value,
         );
     }
-    #[pyo3(name = "get_lower_bounds")]
+    #[pyo3(name = "get_lower_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_lower_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_upper_bounds")]
+    #[pyo3(name = "get_upper_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_upper_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
-        self.get_initial_values(fixed, constrained)
+    #[pyo3(name = "get_bounds", signature = (*, fixed = false, constrained = false))]
+    fn py_get_bounds(&self, fixed: bool, constrained: bool) -> Vec<(f64, f64)> {
+        self.get_bounds(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    #[pyo3(name = "get_initial", signature = (*, fixed = false, constrained = false))]
+    fn py_get_initial(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial(fixed, constrained)
+    }
+    #[pyo3(name = "parameters", signature = (*, fixed = false, constrained = false))]
     fn py_parameters(
         &self,
         fixed: bool,
@@ -822,19 +832,23 @@ impl MultiManager {
             initial_value,
         );
     }
-    #[pyo3(name = "get_lower_bounds")]
+    #[pyo3(name = "get_lower_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_lower_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_upper_bounds")]
+    #[pyo3(name = "get_upper_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_upper_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
-        self.get_initial_values(fixed, constrained)
+    #[pyo3(name = "get_bounds", signature = (*, fixed = false, constrained = false))]
+    fn py_get_bounds(&self, fixed: bool, constrained: bool) -> Vec<(f64, f64)> {
+        self.get_bounds(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    #[pyo3(name = "get_initial", signature = (*, fixed = false, constrained = false))]
+    fn py_get_initial(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial(fixed, constrained)
+    }
+    #[pyo3(name = "parameters", signature = (*, fixed = false, constrained = false))]
     fn py_parameters(
         &self,
         fixed: bool,
@@ -1030,19 +1044,23 @@ impl ExtendedLogLikelihood {
             initial_value,
         );
     }
-    #[pyo3(name = "get_lower_bounds")]
+    #[pyo3(name = "get_lower_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_lower_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_lower_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_upper_bounds")]
+    #[pyo3(name = "get_upper_bounds", signature = (*, fixed = false, constrained = false))]
     fn py_get_upper_bounds(&self, fixed: bool, constrained: bool) -> Vec<f64> {
         self.get_upper_bounds(fixed, constrained)
     }
-    #[pyo3(name = "get_initial_values")]
-    fn py_get_initial_values(&self, fixed: bool, constrained: bool) -> Vec<f64> {
-        self.get_initial_values(fixed, constrained)
+    #[pyo3(name = "get_bounds", signature = (*, fixed = false, constrained = false))]
+    fn py_get_bounds(&self, fixed: bool, constrained: bool) -> Vec<(f64, f64)> {
+        self.get_bounds(fixed, constrained)
     }
-    #[pyo3(name = "parameters", signature = (fixed=false, constrained=false))]
+    #[pyo3(name = "get_initial", signature = (*, fixed = false, constrained = false))]
+    fn py_get_initial(&self, fixed: bool, constrained: bool) -> Vec<f64> {
+        self.get_initial(fixed, constrained)
+    }
+    #[pyo3(name = "parameters", signature = (*, fixed = false, constrained = false))]
     fn py_parameters(
         &self,
         fixed: bool,
