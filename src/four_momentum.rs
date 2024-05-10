@@ -51,7 +51,7 @@ impl FourMomentum {
 
     #[cfg(not(feature = "simd"))]
     #[new]
-    pub fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
+    pub const fn new(e: f64, px: f64, py: f64, pz: f64) -> Self {
         //! Create a new [`FourMomentum`] from energy and momentum components.
         //!
         //! Components are listed in the order $` (E, p_x, p_y, p_z) `$
@@ -68,22 +68,26 @@ impl FourMomentum {
     }
 
     fn __repr__(&self) -> String {
-        format!("FourMomentum({})", self)
+        format!("<FourMomentum ({})>", self)
     }
 
     fn __str__(&self) -> String {
         self.to_string()
     }
 
+    #[allow(clippy::missing_const_for_fn)]
     pub fn e(&self) -> f64 {
         self.0[0]
     }
+    #[allow(clippy::missing_const_for_fn)]
     pub fn px(&self) -> f64 {
         self.0[1]
     }
+    #[allow(clippy::missing_const_for_fn)]
     pub fn py(&self) -> f64 {
         self.0[2]
     }
+    #[allow(clippy::missing_const_for_fn)]
     pub fn pz(&self) -> f64 {
         self.0[3]
     }
@@ -101,6 +105,7 @@ impl FourMomentum {
         self.0[3] = value;
     }
 
+    #[allow(clippy::suboptimal_flops)]
     pub fn m2(&self) -> f64 {
         //! Calculate the invariant $ m^2 $ for this [`FourMomentum`] instance.
         //!
@@ -214,13 +219,13 @@ impl FourMomentum {
 
 impl From<FourMomentum> for Vector4<f64> {
     fn from(val: FourMomentum) -> Self {
-        Vector4::new(val.e(), val.px(), val.py(), val.pz())
+        Self::new(val.e(), val.px(), val.py(), val.pz())
     }
 }
 
 impl From<&FourMomentum> for Vector4<f64> {
     fn from(val: &FourMomentum) -> Self {
-        Vector4::new(val.e(), val.px(), val.py(), val.pz())
+        Self::new(val.e(), val.px(), val.py(), val.pz())
     }
 }
 
@@ -289,9 +294,9 @@ impl From<FourMomentum> for f64x4 {
 
 #[cfg(not(feature = "simd"))]
 impl Add for FourMomentum {
-    type Output = FourMomentum;
+    type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
-        FourMomentum([
+        Self([
             self.0[0] + rhs.0[0],
             self.0[1] + rhs.0[1],
             self.0[2] + rhs.0[2],
@@ -317,9 +322,9 @@ impl Add for &FourMomentum {
 
 #[cfg(not(feature = "simd"))]
 impl Sub for FourMomentum {
-    type Output = FourMomentum;
+    type Output = Self;
     fn sub(self, rhs: Self) -> Self::Output {
-        FourMomentum([
+        Self([
             self.0[0] - rhs.0[0],
             self.0[1] - rhs.0[1],
             self.0[2] - rhs.0[2],
@@ -343,9 +348,9 @@ impl Sub for &FourMomentum {
     }
 }
 
-impl<'a> std::iter::Sum<&'a FourMomentum> for FourMomentum {
-    fn sum<I: Iterator<Item = &'a FourMomentum>>(iter: I) -> Self {
-        iter.fold(FourMomentum::default(), |a, b| a + *b)
+impl<'a> std::iter::Sum<&'a Self> for FourMomentum {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(Self::default(), |a, b| a + *b)
     }
 }
 

@@ -1,4 +1,6 @@
+#![warn(clippy::nursery)]
 #![allow(dead_code)]
+#![allow(unused_imports)]
 #![cfg_attr(feature = "simd", feature(portable_simd))]
 pub mod amplitude;
 pub mod dataset;
