@@ -373,6 +373,10 @@ impl Dataset {
         Ok(Python::with_gil(|py| Py::new(py, self.events.read()[idx as usize].clone())).unwrap())
     }
 
+    pub fn weights(&self) -> Vec<f64> {
+        self.events.read().iter().map(|e| e.weight).collect()
+    }
+
     // TODO:
     // pub fn select(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> PyDataset {}
     // pub fn reject(&mut self, query: impl Fn(&Event) -> bool + Sync + Send) -> PyDataset {}

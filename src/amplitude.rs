@@ -1,37 +1,104 @@
+use itertools::Itertools;
 use num::complex::Complex64;
 use parking_lot::RwLock;
 use pyo3::prelude::*;
 use rayon::prelude::*;
-use std::{fmt::Debug, sync::Arc};
+use std::{
+    collections::HashSet,
+    fmt::{Debug, Display},
+    ops::{Add, Mul},
+    sync::Arc,
+};
+use thiserror::Error;
 
 use crate::dataset::{Dataset, Event};
 
-/// Creates a wrapped [`Amplitude`] which can be registered by a [`crate::manager::Manager`].
+#[pyclass]
+#[derive(Clone)]
+pub struct Parameter {
+    amplitude: String,
+    name: String,
+    index: Option<usize>,
+    fixed_index: Option<usize>,
+    initial: f64,
+    bounds: (f64, f64),
+}
+#[pymethods]
+impl Parameter {
+    fn __str__(&self) -> String {
+        format!("{}", self)
+    }
+    fn __repr__(&self) -> String {
+        format!(
+            "<Parameter: amplitude={}, name={}>",
+            self.amplitude, self.name
+        )
+    }
+    #[new]
+    pub fn new(amplitude: &str, name: &str, index: usize) -> Self {
+        Self {
+            amplitude: amplitude.to_string(),
+            name: name.to_string(),
+            index: Some(index),
+            fixed_index: None,
+            initial: 0.0,
+            bounds: (f64::NEG_INFINITY, f64::INFINITY),
+        }
+    }
+}
+
+impl Debug for Parameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.index.is_none() {
+            write!(
+                f,
+                "<{}>[ {} (*{}*) ]({:?})({:?})",
+                self.amplitude, self.name, self.initial, self.index, self.fixed_index,
+            )
+        } else {
+            write!(
+                f,
+                "<{}>[ {} ({}) ]({:?})({:?})",
+                self.amplitude, self.name, self.initial, self.index, self.fixed_index,
+            )
+        }
+    }
+}
+impl Display for Parameter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.index.is_none() {
+            write!(
+                f,
+                "<{}>[ {} (*{}*) ]",
+                self.amplitude, self.name, self.initial
+            )
+        } else {
+            write!(
+                f,
+                "<{}>[ {} ({}) ]",
+                self.amplitude, self.name, self.initial
+            )
+        }
+    }
+}
+
+/// Creates a wrapped [`AmpOp`] which can be registered by a [`crate::amplitude::Model`].
 ///
-/// This macro is a convenience method which takes a name and a [`Node`] and generates a new
-/// [`Amplitude`] wrapped in a [`RwLock`] which is wrapped in an [`Arc`].
-///
-/// # Examples
-///
-/// Basic usage:
-///
-/// ```
-/// use rustitude_core::prelude::*;
-/// use num_complex::Complex64;
-/// struct A;
-/// impl Node for A {
-///     fn precalculate(&mut self, dataset: &Dataset) {}
-///     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
-///     fn parameters(&self) -> Option<Vec<String>> {None}
-/// }
-///
-/// assert_eq!(amplitude!("MyAmplitude", A).compute(&[], &Event::default()), Complex64::new(0.0, 0.0));
+/// This macro is a convenience method which takes a name and a [`Node`] and generates a new [`AmpOp`].
 /// ```
 #[macro_export]
 macro_rules! amplitude {
     ($name:expr, $node:expr) => {{
-        Amplitude::new($name, Box::new($node))
+        AmpOp::Amplitude(Amplitude::new($name, $node))
     }};
+}
+
+#[derive(Debug, Clone, Error)]
+pub enum NodeError {
+    #[error("invalid parameter value")]
+    InvalidParameterValue(String),
+    #[error("evaluation error")]
+    EvaluationError(String),
 }
 
 /// A trait which contains all the required methods for a functioning [`Amplitude`].
@@ -96,11 +163,8 @@ macro_rules! amplitude {
 ///     }
 /// }
 /// impl Node for Ylm {
-///     fn parameters(&self) -> Option<Vec<String>> {
-///         None
-///     }
-///
-///     fn precalculate(&mut self, dataset: &Dataset) {
+///     fn parameters(&self) -> Vec<String> { vec![] }
+///     fn precalculate(&mut self, dataset: &Dataset) -> Result<(), NodeError> {
 ///         self.1 = dataset.events.read()
 ///             .par_iter()
 ///             .map(|event| {
@@ -119,10 +183,11 @@ macro_rules! amplitude {
 ///                 ComplexSH::Spherical.eval(self.0.l(), self.0.m(), &p)
 ///             })
 ///             .collect();
+///         Ok(())
 ///     }
 ///
-///     fn calculate(&self, _parameters: &[f64], event: &Event) -> Complex64 {
-///         self.1[event.index]
+///     fn calculate(&self, _parameters: &[f64], event: &Event) -> Result<Complex64, NodeError> {
+///         Ok(self.1[event.index])
 ///     }
 /// }
 /// ```
@@ -133,15 +198,13 @@ macro_rules! amplitude {
 /// use rustitude_core::prelude::*;
 /// struct ComplexScalar;
 /// impl Node for ComplexScalar {
-///     fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-///         Complex64::new(parameters[0], parameters[1])
+///     fn calculate(&self, parameters: &[f64], _event: &Event) -> Result<Complex64, NodeError> {
+///         Ok(Complex64::new(parameters[0], parameters[1]))
 ///     }
 ///
-///     fn parameters(&self) -> Option<Vec<String>> {
-///         Some(vec!["real".to_string(), "imag".to_string()])
+///     fn parameters(&self) -> Vec<String> {
+///         vec!["real".to_string(), "imag".to_string()]
 ///     }
-///
-///     fn precalculate(&mut self, _dataset: &Dataset) {}
 /// }
 /// ```
 pub trait Node: Sync + Send {
@@ -151,7 +214,9 @@ pub trait Node: Sync + Send {
     /// parameters. For instance, to calculate a spherical harmonic, we don't actually need any
     /// other information than what is contained in the [`Event`], so we can calculate a spherical
     /// harmonic for every event once and then retrieve the data in the [`Node::calculate`] method.
-    fn precalculate(&mut self, dataset: &Dataset);
+    fn precalculate(&mut self, _dataset: &Dataset) -> Result<(), NodeError> {
+        Ok(())
+    }
 
     /// A method which runs every time the amplitude is evaluated and produces a [`Complex64`].
     ///
@@ -161,7 +226,7 @@ pub trait Node: Sync + Send {
     /// a slice of [`f64`]s. This slice is guaranteed to have the same length and order as
     /// specified in the [`Node::parameters`] method, or it will be empty if that method returns
     /// [`None`].
-    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64;
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Result<Complex64, NodeError>;
 
     /// A method which specifies the number and order of parameters used by the [`Node`].
     ///
@@ -169,7 +234,305 @@ pub trait Node: Sync + Send {
     /// each [`Node`]. If this method returns [`None`], it is implied that the [`Node`] takes no
     /// parameters as input. Otherwise, the parameter names should be listed in the same order they
     /// are expected to be given as input to the [`Node::calculate`] method.
-    fn parameters(&self) -> Option<Vec<String>>;
+    fn parameters(&self) -> Vec<String>;
+}
+
+#[pyclass]
+#[derive(Clone)]
+pub struct PyAmpOp {
+    pub op: AmpOp,
+}
+
+impl From<AmpOp> for PyAmpOp {
+    fn from(value: AmpOp) -> Self {
+        Self { op: value }
+    }
+}
+
+#[pymethods]
+impl PyAmpOp {
+    pub fn print_tree(&self) {
+        self.op.print_tree()
+    }
+    pub fn real(&self) -> Self {
+        self.op.real().into()
+    }
+    pub fn imag(&self) -> Self {
+        self.op.imag().into()
+    }
+    pub fn norm_sqr(&self) -> Self {
+        self.op.norm_sqr().into()
+    }
+    pub fn __add__(&self, other: Self) -> Self {
+        (self.op.clone() + other.op).into()
+    }
+    pub fn __mul__(&self, other: Self) -> Self {
+        (self.op.clone() * other.op).into()
+    }
+}
+
+#[derive(Clone)]
+pub enum AmpOp {
+    Amplitude(Amplitude),
+    Sum(Vec<AmpOp>),
+    Product(Vec<AmpOp>),
+    Real(Box<AmpOp>),
+    Imag(Box<AmpOp>),
+    NormSqr(Box<AmpOp>),
+}
+
+impl Debug for AmpOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Amplitude(amp) => writeln!(f, "{:?}", amp),
+            Self::Sum(ops) => {
+                write!(f, "Sum [ ")?;
+                for op in ops {
+                    write!(f, "{:?} ", op)?;
+                }
+                write!(f, "]")
+            }
+            Self::Product(ops) => {
+                write!(f, "Prod [ ")?;
+                for op in ops {
+                    write!(f, "{:?} ", op)?;
+                }
+                write!(f, "]")
+            }
+            Self::Real(op) => write!(f, "Re[{:?}]", op),
+            Self::Imag(op) => write!(f, "Im[{:?}]", op),
+            Self::NormSqr(op) => write!(f, "|[{:?}]|^2", op),
+        }
+    }
+}
+
+impl Display for AmpOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Amplitude(amp) => writeln!(f, "{}", amp),
+            Self::Sum(ops) => {
+                write!(f, "Sum [ ")?;
+                for op in ops {
+                    write!(f, "{} ", op)?;
+                }
+                write!(f, "]")
+            }
+            Self::Product(ops) => {
+                write!(f, "Prod [ ")?;
+                for op in ops {
+                    write!(f, "{} ", op)?;
+                }
+                write!(f, "]")
+            }
+            Self::Real(op) => write!(f, "Re[{:?}]", op),
+            Self::Imag(op) => write!(f, "Im[{:?}]", op),
+            Self::NormSqr(op) => write!(f, "|[{:?}]|^2", op),
+        }
+    }
+}
+impl AmpOp {
+    pub fn print_tree(&self) {
+        self._print_tree(vec![]);
+    }
+    fn _print_indent(bits: &[bool]) {
+        bits.iter()
+            .for_each(|b| if *b { print!("  ┃ ") } else { print!("    ") });
+    }
+    fn _print_intermediate() {
+        print!("  ┣━");
+    }
+    fn _print_end() {
+        print!("  ┗━");
+    }
+    fn _print_tree(&self, mut bits: Vec<bool>) {
+        match self {
+            Self::Amplitude(amp) => {
+                if amp.parameters().len() > 7 {
+                    println!(" {}({},...)", amp.name, amp.parameters()[0..7].join(", "));
+                } else {
+                    println!(" {}({})", amp.name, amp.parameters().join(", "));
+                }
+            }
+            Self::Sum(ops) => {
+                println!("[ + ]");
+                for (i, op) in ops.iter().enumerate() {
+                    Self::_print_indent(&bits);
+                    if i == ops.len() - 1 {
+                        Self::_print_end();
+                        bits.push(false);
+                    } else {
+                        Self::_print_intermediate();
+                        bits.push(true);
+                    }
+                    op._print_tree(bits.clone());
+                    bits.pop();
+                }
+            }
+            Self::Product(ops) => {
+                println!("[ - ]");
+                for (i, op) in ops.iter().enumerate() {
+                    Self::_print_indent(&bits);
+                    if i == ops.len() - 1 {
+                        Self::_print_end();
+                        bits.push(false);
+                    } else {
+                        Self::_print_intermediate();
+                        bits.push(true);
+                    }
+                    op._print_tree(bits.clone());
+                    bits.pop();
+                }
+            }
+            Self::Real(op) => {
+                println!("[ real ]");
+                Self::_print_indent(&bits);
+                Self::_print_end();
+                bits.push(false);
+                op._print_tree(bits.clone());
+                bits.pop();
+            }
+            Self::Imag(op) => {
+                println!("[ imag ]");
+                Self::_print_indent(&bits);
+                Self::_print_end();
+                bits.push(false);
+                op._print_tree(bits.clone());
+                bits.pop();
+            }
+            Self::NormSqr(op) => {
+                println!("[ norm sqr ]");
+                Self::_print_indent(&bits);
+                Self::_print_end();
+                bits.push(false);
+                op._print_tree(bits.clone());
+                bits.pop();
+            }
+        }
+    }
+    pub fn walk(&self) -> Vec<Amplitude> {
+        match self {
+            Self::Amplitude(amp) => vec![amp.clone()],
+            Self::Sum(ops) => ops.iter().flat_map(|op| op.walk()).collect(),
+            Self::Product(ops) => ops.iter().flat_map(|op| op.walk()).collect(),
+            Self::Real(op) => op.walk(),
+            Self::Imag(op) => op.walk(),
+            Self::NormSqr(op) => op.walk(),
+        }
+    }
+
+    pub fn walk_mut(&mut self) -> Vec<&mut Amplitude> {
+        match self {
+            Self::Amplitude(amp) => vec![amp],
+            Self::Sum(ops) => ops.iter_mut().flat_map(|op| op.walk_mut()).collect(),
+            Self::Product(ops) => ops.iter_mut().flat_map(|op| op.walk_mut()).collect(),
+            Self::Real(op) => op.walk_mut(),
+            Self::Imag(op) => op.walk_mut(),
+            Self::NormSqr(op) => op.walk_mut(),
+        }
+    }
+
+    pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
+        match self {
+            Self::Amplitude(amp) => cache[amp.cache_position],
+            Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
+            Self::Product(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).product()),
+            Self::Real(op) => op.compute(cache),
+            Self::Imag(op) => op.compute(cache),
+            Self::NormSqr(op) => op.compute(cache),
+        }
+    }
+
+    pub fn real(&self) -> Self {
+        Self::Real(Box::new(self.clone()))
+    }
+    pub fn imag(&self) -> Self {
+        Self::Imag(Box::new(self.clone()))
+    }
+    pub fn norm_sqr(&self) -> Self {
+        Self::NormSqr(Box::new(self.clone()))
+    }
+}
+impl Add for AmpOp {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self.clone(), rhs.clone()) {
+            (Self::Sum(ops_l), Self::Sum(ops_r)) => Self::Sum([ops_l, ops_r].concat()),
+            (Self::Sum(ops), _) => {
+                let mut sum_ops = ops;
+                sum_ops.push(rhs);
+                Self::Sum(sum_ops)
+            }
+            (_, Self::Sum(ops)) => {
+                let mut sum_ops = ops;
+                sum_ops.push(self);
+                Self::Sum(sum_ops)
+            }
+            (_, _) => Self::Sum(vec![self, rhs]),
+        }
+    }
+}
+impl Add<AmpOp> for &AmpOp {
+    type Output = <AmpOp as Add>::Output;
+
+    fn add(self, rhs: AmpOp) -> Self::Output {
+        AmpOp::add(self.clone(), rhs)
+    }
+}
+impl Add<&Self> for AmpOp {
+    type Output = <Self as Add>::Output;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        Self::add(self, rhs.clone())
+    }
+}
+impl Add for &AmpOp {
+    type Output = <AmpOp as Add>::Output;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        AmpOp::add(self.clone(), rhs.clone())
+    }
+}
+impl Mul for AmpOp {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self.clone(), rhs.clone()) {
+            (Self::Product(ops_l), Self::Product(ops_r)) => Self::Product([ops_l, ops_r].concat()),
+            (Self::Product(ops), _) => {
+                let mut sum_ops = ops;
+                sum_ops.push(rhs);
+                Self::Product(sum_ops)
+            }
+            (_, Self::Product(ops)) => {
+                let mut sum_ops = ops;
+                sum_ops.push(self);
+                Self::Product(sum_ops)
+            }
+            (_, _) => Self::Product(vec![self, rhs]),
+        }
+    }
+}
+impl Mul<AmpOp> for &AmpOp {
+    type Output = <AmpOp as Mul>::Output;
+
+    fn mul(self, rhs: AmpOp) -> Self::Output {
+        AmpOp::mul(self.clone(), rhs)
+    }
+}
+impl Mul<&Self> for AmpOp {
+    type Output = <Self as Mul>::Output;
+
+    fn mul(self, rhs: &Self) -> Self::Output {
+        Self::mul(self, rhs.clone())
+    }
+}
+impl Mul for &AmpOp {
+    type Output = <AmpOp as Mul>::Output;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        AmpOp::mul(self.clone(), rhs.clone())
+    }
 }
 
 /// A struct which stores a named [`Node`].
@@ -178,10 +541,7 @@ pub trait Node: Sync + Send {
 /// associated with the [`Node`]. This allows us to distinguish multiple uses of the same [`Node`]
 /// in an analysis, and makes each [`Node`]'s parameters unique.
 ///
-/// The common construction pattern is through the macro [`amplitude!`] and functions [`scalar`],
-/// [`cscalar`], and [`pcscalar`] which a generic [`Amplitude`], a [`Scalar`], a [`ComplexScalar`],
-/// and a [`PolarComplexScalar`] respectively
-#[pyclass]
+/// This is mostly used interally as an intermediate step to an [`AmpOp`].
 #[derive(Clone)]
 pub struct Amplitude {
     /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
@@ -190,61 +550,320 @@ pub struct Amplitude {
     /// [`Event`] in a [`Dataset`], a [`Vec<f64>`] of parameter values, and possibly some
     /// precomputed values.
     pub node: Arc<RwLock<Box<dyn Node>>>,
+    pub active: bool,
+    pub cache_position: usize,
+    pub parameter_index_start: usize,
 }
 impl Debug for Amplitude {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        writeln!(f, "{}", self.name)?;
-        Ok(())
+        f.debug_struct("Amplitude")
+            .field("name", &self.name)
+            .field("active", &self.active)
+            .field("cache_position", &self.cache_position)
+            .field("parameter_index_start", &self.parameter_index_start)
+            .finish()
+    }
+}
+impl Display for Amplitude {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.active {
+            write!(f, "{}", self.name)
+        } else {
+            write!(f, "# {} #", self.name)
+        }
     }
 }
 impl Amplitude {
-    pub fn new(name: &str, node: Box<dyn Node>) -> Self {
-        //! Creates an named [`Amplitude`] from a [`Node`].
-        //!
-        //! The [`amplitude!`] macro is probably the cleaner way of doing this, since it also wraps
-        //! this [`Amplitude`] in an [`Arc<RwLock<Amplitude>>`] container which can then be registered by
-        //! a [`crate::manager::Manager`].
-        //!
-        //! # Examples
-        //!
-        //! Basic usage:
-        //!
-        //! ```
-        //! use rustitude_core::prelude::*;
-        //! use num_complex::Complex64;
-        //! struct A;
-        //! impl Node for A {
-        //!     fn precalculate(&mut self, dataset: &Dataset) {}
-        //!     fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 { 0.0.into() }
-        //!     fn parameters(&self) -> Option<Vec<String>> {None}
-        //! }
-        //!
-        //! assert_eq!(Amplitude::new("A", Box::new(A)).name, "A".to_string());
-        //! ```
-        Self {
+    #[allow(clippy::new_ret_no_self)]
+    fn new(name: &str, node: Box<dyn Node>) -> AmpOp {
+        AmpOp::Amplitude(Self {
             name: name.to_string(),
             node: Arc::new(RwLock::new(node)),
+            active: true,
+            cache_position: 0,
+            parameter_index_start: 0,
+        })
+    }
+    fn register(
+        &mut self,
+        cache_position: usize,
+        parameter_index_start: usize,
+        dataset: &Dataset,
+    ) -> Result<(), NodeError> {
+        self.cache_position = cache_position;
+        self.parameter_index_start = parameter_index_start;
+        self.precalculate(dataset)
+    }
+}
+impl Node for Amplitude {
+    fn precalculate(&mut self, dataset: &Dataset) -> Result<(), NodeError> {
+        self.node.write().precalculate(dataset)
+    }
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Result<Complex64, NodeError> {
+        self.node.read().calculate(
+            &parameters
+                [self.parameter_index_start..self.parameter_index_start + self.parameters().len()],
+            event,
+        )
+    }
+    fn parameters(&self) -> Vec<String> {
+        self.node.read().parameters()
+    }
+}
+
+#[pyclass]
+#[derive(Debug, Clone)]
+pub struct Model {
+    root: AmpOp,
+    amplitudes: Vec<Amplitude>,
+    parameters: Vec<Parameter>,
+}
+
+#[pymethods]
+impl Model {
+    #[new]
+    fn from_pyampop(root: PyAmpOp) -> Self {
+        Self::new(root.op)
+    }
+    pub fn get_parameter(&self, amplitude_name: &str, parameter_name: &str) -> Option<Parameter> {
+        self.parameters
+            .iter()
+            .find(|p: &&Parameter| p.amplitude == amplitude_name && p.name == parameter_name)
+            .cloned()
+    }
+    pub fn get_parameters(&self) -> Vec<Parameter> {
+        self.parameters.clone()
+    }
+    pub fn print_parameters(&self) {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
+        if self.any_fixed() {
+            println!(
+                "Fixed: {}",
+                self.group_by_index()[0]
+                    .iter()
+                    .map(|p| format!("{:?}", p))
+                    .join(", ")
+            );
+        }
+        for (i, group) in self.group_by_index().iter().skip(any_fixed).enumerate() {
+            println!(
+                "{}: {}",
+                i,
+                group.iter().map(|p| format!("{:?}", p)).join(", ")
+            );
         }
     }
-    pub fn precompute(&self, dataset: &Dataset) {
-        //! Precalculates the stored [`Node`].
-        //!
-        //! This method is automatically called when a new [`Amplitude`] is registered by a
-        //! [`crate::manager::Manager`]
-        //!
-        //! See also: [`crate::manager::Manage::register`], [`Node::precalculate`]
-        self.node.write().precalculate(dataset);
+    pub fn constrain(
+        &mut self,
+        amplitude_1: &str,
+        parameter_1: &str,
+        amplitude_2: &str,
+        parameter_2: &str,
+    ) {
+        let p1 = self.get_parameter(amplitude_1, parameter_1).unwrap();
+        let p2 = self.get_parameter(amplitude_2, parameter_2).unwrap();
+        for par in self.parameters.iter_mut() {
+            // None < Some(0)
+            match p1.index.cmp(&p2.index) {
+                // p1 < p2
+                std::cmp::Ordering::Less => {
+                    if par.index == p2.index {
+                        par.index = p1.index;
+                        par.initial = p1.initial;
+                        par.fixed_index = p1.fixed_index;
+                    }
+                }
+                std::cmp::Ordering::Equal => unimplemented!(),
+                // p2 < p1
+                std::cmp::Ordering::Greater => {
+                    if par.index == p1.index {
+                        par.index = p2.index;
+                        par.initial = p2.initial;
+                        par.fixed_index = p2.fixed_index;
+                    }
+                }
+            }
+        }
+        self.reindex_parameters();
     }
-    pub fn compute(&self, parameters: &[f64], event: &Event) -> Complex64 {
-        //! Calculates the stored [`Node`].
-        //!
-        //! This method is intended to be called by a [`crate::manager::Manager`] in the [`crate::manager::Manager::compute`]
-        //! method. You can also use this method to test amplitudes, since the [`crate::manager::Manager::compute`]
-        //! method will automatically calculate the absolute-square of the amplitude and return a
-        //! [`f64`] rather than a [`Complex64`].
-        //!
-        //! See also: [`crate::manager::Manager::compute`], [`Node::calculate`]
-        self.node.read().calculate(parameters, event)
+
+    pub fn fix(&mut self, amplitude: &str, parameter: &str, value: f64) {
+        let search_par = self.get_parameter(amplitude, parameter).unwrap();
+        let fixed_index = self.get_min_fixed_index();
+        for par in self.parameters.iter_mut() {
+            if par.index == search_par.index {
+                par.index = None;
+                par.initial = value;
+                par.fixed_index = fixed_index;
+            }
+        }
+    }
+    pub fn free(&mut self, amplitude: &str, parameter: &str) {
+        let search_par = self.get_parameter(amplitude, parameter).unwrap();
+        let index = self.get_min_free_index();
+        for par in self.parameters.iter_mut() {
+            if par.fixed_index == search_par.fixed_index {
+                par.index = index;
+                par.fixed_index = None;
+            }
+        }
+    }
+    pub fn set_bounds(&mut self, amplitude: &str, parameter: &str, bounds: (f64, f64)) {
+        let search_par = self.get_parameter(amplitude, parameter).unwrap();
+        if search_par.index.is_some() {
+            for par in self.parameters.iter_mut() {
+                if par.index == search_par.index {
+                    par.bounds = bounds;
+                }
+            }
+        } else {
+            for par in self.parameters.iter_mut() {
+                if par.fixed_index == search_par.fixed_index {
+                    par.bounds = bounds;
+                }
+            }
+        }
+    }
+    pub fn set_initial(&mut self, amplitude: &str, parameter: &str, initial: f64) {
+        let search_par = self.get_parameter(amplitude, parameter).unwrap();
+        if search_par.index.is_some() {
+            for par in self.parameters.iter_mut() {
+                if par.index == search_par.index {
+                    par.initial = initial;
+                }
+            }
+        } else {
+            for par in self.parameters.iter_mut() {
+                if par.fixed_index == search_par.fixed_index {
+                    par.initial = initial;
+                }
+            }
+        }
+    }
+    pub fn get_bounds(&self) -> Vec<(f64, f64)> {
+        self.group_by_index()
+            .iter()
+            .filter_map(|group| group.first().map(|par| par.bounds))
+            .collect()
+    }
+    pub fn get_initial(&self) -> Vec<f64> {
+        self.group_by_index()
+            .iter()
+            .filter_map(|group| group.first().map(|par| par.initial))
+            .collect()
+    }
+    pub fn get_n_free(&self) -> usize {
+        self.get_min_free_index().unwrap_or(0)
+    }
+}
+impl Model {
+    fn new(root: AmpOp) -> Self {
+        let mut amp_names = HashSet::new();
+        let amplitudes: Vec<Amplitude> = root
+            .walk()
+            .into_iter()
+            .filter(|amp| amp_names.insert(amp.name.clone()))
+            .collect();
+        let parameter_tags: Vec<(String, String)> = amplitudes
+            .iter()
+            .flat_map(|amp| {
+                amp.parameters()
+                    .iter()
+                    .map(|p| (amp.name.clone(), p.clone()))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        let parameters = parameter_tags
+            .iter()
+            .enumerate()
+            .map(|(i, (amp_name, par_name))| Parameter::new(amp_name, par_name, i))
+            .collect();
+        Self {
+            root,
+            amplitudes,
+            parameters,
+        }
+    }
+    pub fn compute(&self, parameters: &[f64], event: &Event) -> f64 {
+        let pars: Vec<f64> = self
+            .parameters
+            .iter()
+            .map(|p| p.index.map_or_else(|| p.initial, |i| parameters[i]))
+            .collect();
+        // First, we calculate the values for the active amplitudes
+        let cache: Vec<Option<Complex64>> = self
+            .amplitudes
+            .iter()
+            .map(|amp| {
+                if amp.active {
+                    let res = amp.calculate(&pars, event).unwrap(); // unwrap panics if any
+                                                                    // errors occur in calculation
+                    Some(res)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.root.compute(&cache).unwrap().re // unwrap panics if all the
+                                              // amplitudes are deactivated
+    }
+    pub fn load(&mut self, dataset: &Dataset) {
+        let mut next_cache_pos = 0;
+        let mut parameter_index = 0;
+        let mut amp_names = HashSet::new();
+        self.root
+            .walk_mut()
+            .into_iter()
+            .filter(|amp| amp_names.insert(amp.name.clone()))
+            .for_each(|amp| {
+                amp.register(next_cache_pos, parameter_index, dataset)
+                    .unwrap(); // unwrap panics if precalculate fails
+                next_cache_pos += 1;
+                parameter_index += amp.parameters().len();
+            });
+    }
+    fn group_by_index(&self) -> Vec<Vec<&Parameter>> {
+        self.parameters
+            .iter()
+            .sorted_by_key(|par| par.index)
+            .group_by(|par| par.index)
+            .into_iter()
+            .map(|(_, group)| group.collect::<Vec<_>>())
+            .collect()
+    }
+    fn group_by_index_mut(&mut self) -> Vec<Vec<&mut Parameter>> {
+        self.parameters
+            .iter_mut()
+            .sorted_by_key(|par| par.index)
+            .group_by(|par| par.index)
+            .into_iter()
+            .map(|(_, group)| group.collect())
+            .collect()
+    }
+    fn any_fixed(&self) -> bool {
+        self.parameters.iter().any(|p| p.index.is_none())
+    }
+    fn reindex_parameters(&mut self) {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
+        self.group_by_index_mut()
+            .iter_mut()
+            .skip(any_fixed) // first element could be index = None
+            .enumerate()
+            .for_each(|(ind, par_group)| par_group.iter_mut().for_each(|par| par.index = Some(ind)))
+    }
+    fn get_min_free_index(&self) -> Option<usize> {
+        self.parameters
+            .iter()
+            .filter_map(|p| p.index)
+            .max()
+            .map_or(Some(0), |max| Some(max + 1))
+    }
+    fn get_min_fixed_index(&self) -> Option<usize> {
+        self.parameters
+            .iter()
+            .filter_map(|p| p.fixed_index)
+            .max()
+            .map_or(Some(0), |max| Some(max + 1))
     }
 }
 
@@ -257,22 +876,28 @@ impl Amplitude {
 /// - `value`: The value of the scalar.
 pub struct Scalar;
 impl Node for Scalar {
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["value".to_string()])
+    fn parameters(&self) -> Vec<String> {
+        vec!["value".to_string()]
     }
-
-    fn precalculate(&mut self, _dataset: &Dataset) {}
-
-    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-        Complex64::new(parameters[0], 0.0)
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Result<Complex64, NodeError> {
+        Ok(Complex64::new(parameters[0], 0.0))
     }
 }
 
 #[pyfunction]
-pub fn scalar(name: &str) -> Amplitude {
+pub fn py_scalar(name: &str) -> PyAmpOp {
     //! Creates a named [`Scalar`].
     //!
-    //! This is a convenience method to generate an [`Amplitude`] which is just a single free
+    //! This is a convenience method to generate a [`PyAmpOp`] which is just a single free
+    //! parameter called `value`.
+    //!
+    //! See also: [`scalar`]
+    Amplitude::new(name, Box::new(Scalar)).into()
+}
+pub fn scalar(name: &str) -> AmpOp {
+    //! Creates a named [`Scalar`].
+    //!
+    //! This is a convenience method to generate an [`AmpOp`] which is just a single free
     //! parameter called `value`.
     //!
     //! # Examples
@@ -282,12 +907,11 @@ pub fn scalar(name: &str) -> Amplitude {
     //! ```
     //! use rustitude_core::prelude::*;
     //! let my_scalar = scalar("MyScalar");
-    //! assert_eq!(my_scalar.node.read().parameters(), Some(vec!["value".to_string()]));
+    //! if let AmpOp::Amplitude(amp) = my_scalar {
+    //!     assert_eq!(amp.node.read().parameters(), vec!["value".to_string()]);
+    //! }
     //! ```
-    Amplitude {
-        name: name.to_string(),
-        node: Arc::new(RwLock::new(Box::new(Scalar))),
-    }
+    Amplitude::new(name, Box::new(Scalar))
 }
 /// A [`Node`] for computing a single complex value from two input parameters.
 ///
@@ -300,22 +924,29 @@ pub fn scalar(name: &str) -> Amplitude {
 /// - `imag`: The imaginary part of the complex scalar.
 pub struct ComplexScalar;
 impl Node for ComplexScalar {
-    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-        Complex64::new(parameters[0], parameters[1])
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Result<Complex64, NodeError> {
+        Ok(Complex64::new(parameters[0], parameters[1]))
     }
 
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["real".to_string(), "imag".to_string()])
+    fn parameters(&self) -> Vec<String> {
+        vec!["real".to_string(), "imag".to_string()]
     }
-
-    fn precalculate(&mut self, _dataset: &Dataset) {}
 }
 
 #[pyfunction]
-pub fn cscalar(name: &str) -> Amplitude {
+pub fn py_cscalar(name: &str) -> PyAmpOp {
     //! Creates a named [`ComplexScalar`].
     //!
-    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
+    //! This is a convenience method to generate an [`PyAmpOp`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`.
+    //!
+    //! See also: [`cscalar`]
+    Amplitude::new(name, Box::new(ComplexScalar)).into()
+}
+pub fn cscalar(name: &str) -> AmpOp {
+    //! Creates a named [`ComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`AmpOp`] which represents a complex
     //! value determined by two parameters, `real` and `imag`.
     //!
     //! # Examples
@@ -325,12 +956,11 @@ pub fn cscalar(name: &str) -> Amplitude {
     //! ```
     //! use rustitude_core::prelude::*;
     //! let my_cscalar = cscalar("MyComplexScalar");
-    //! assert_eq!(my_cscalar.node.read().parameters(), Some(vec!["real".to_string(), "imag".to_string()]));
+    //! if let AmpOp::Amplitude(amp) = my_cscalar {
+    //!     assert_eq!(amp.node.read().parameters(), vec!["real".to_string(), "imag".to_string()]);
+    //! }
     //! ```
-    Amplitude {
-        name: name.to_string(),
-        node: Arc::new(RwLock::new(Box::new(ComplexScalar))),
-    }
+    Amplitude::new(name, Box::new(ComplexScalar))
 }
 
 /// A [`Node`] for computing a single complex value from two input parameters in polar form.
@@ -344,15 +974,43 @@ pub fn cscalar(name: &str) -> Amplitude {
 /// - `phi`: The phase of the complex scalar.
 pub struct PolarComplexScalar;
 impl Node for PolarComplexScalar {
-    fn calculate(&self, parameters: &[f64], _event: &Event) -> Complex64 {
-        parameters[0] * Complex64::cis(parameters[1])
+    fn calculate(&self, parameters: &[f64], _event: &Event) -> Result<Complex64, NodeError> {
+        Ok(parameters[0] * Complex64::cis(parameters[1]))
     }
 
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(vec!["mag".to_string(), "phi".to_string()])
+    fn parameters(&self) -> Vec<String> {
+        vec!["mag".to_string(), "phi".to_string()]
     }
+}
 
-    fn precalculate(&mut self, _dataset: &Dataset) {}
+#[pyfunction]
+pub fn py_pcscalar(name: &str) -> PyAmpOp {
+    //! Creates a named [`PolarComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`PyAmpOp`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`.
+    //!
+    //! See also: [`pcscalar`]
+    Amplitude::new(name, Box::new(PolarComplexScalar)).into()
+}
+pub fn pcscalar(name: &str) -> AmpOp {
+    //! Creates a named [`PolarComplexScalar`].
+    //!
+    //! This is a convenience method to generate an [`AmpOp`] which represents a complex
+    //! value determined by two parameters, `real` and `imag`.
+    //!
+    //! # Examples
+    //!
+    //! Basic usage:
+    //!
+    //! ```
+    //! use rustitude_core::prelude::*;
+    //! let my_pcscalar = pcscalar("MyPolarComplexScalar");
+    //! if let AmpOp::Amplitude(amp) = my_pcscalar {
+    //!     assert_eq!(amp.node.read().parameters(), vec!["mag".to_string(), "phi".to_string()]);
+    //! }
+    //! ```
+    Amplitude::new(name, Box::new(PolarComplexScalar))
 }
 
 pub struct Piecewise<F>
@@ -364,28 +1022,6 @@ where
     calculated_variable: Vec<f64>,
 }
 
-#[pyfunction]
-pub fn pcscalar(name: &str) -> Amplitude {
-    //! Creates a named [`PolarComplexScalar`].
-    //!
-    //! This is a convenience method to generate an [`Amplitude`] which represents a complex
-    //! value determined by two parameters, `real` and `imag`.
-    //!
-    //! # Examples
-    //!
-    //! Basic usage:
-    //!
-    //! ```
-    //! use rustitude_core::prelude::*;
-    //! let my_pcscalar = pcscalar("MyPolarComplexScalar");
-    //! assert_eq!(my_pcscalar.node.read().parameters(), Some(vec!["mag".to_string(), "phi".to_string()]));
-    //! ```
-    Amplitude {
-        name: name.to_string(),
-        node: Arc::new(RwLock::new(Box::new(PolarComplexScalar))),
-    }
-}
-
 impl<F> Piecewise<F>
 where
     F: Fn(&Event) -> f64 + Send + Sync + Copy,
@@ -393,7 +1029,12 @@ where
     pub fn new(bins: usize, range: (f64, f64), variable: F) -> Self {
         let diff = (range.1 - range.0) / (bins as f64);
         let edges = (0..bins)
-            .map(|i| (range.0 + i as f64 * diff, range.0 + (i + 1) as f64 * diff))
+            .map(|i| {
+                (
+                    (i as f64).mul_add(diff, range.0),
+                    ((i + 1) as f64).mul_add(diff, range.0),
+                )
+            })
             .collect();
         Self {
             edges,
@@ -407,52 +1048,56 @@ impl<F> Node for Piecewise<F>
 where
     F: Fn(&Event) -> f64 + Send + Sync + Copy,
 {
-    fn precalculate(&mut self, dataset: &Dataset) {
+    fn precalculate(&mut self, dataset: &Dataset) -> Result<(), NodeError> {
         self.calculated_variable = dataset
             .events
             .read()
             .par_iter()
             .map(self.variable)
             .collect();
+        Ok(())
     }
 
-    fn calculate(&self, parameters: &[f64], event: &Event) -> Complex64 {
+    fn calculate(&self, parameters: &[f64], event: &Event) -> Result<Complex64, NodeError> {
         let val = self.calculated_variable[event.index];
         let opt_i_bin = self.edges.iter().position(|&(l, r)| val >= l && val <= r);
-        if let Some(i_bin) = opt_i_bin {
-            Complex64::new(parameters[i_bin * 2], parameters[(i_bin * 2) + 1])
-        } else {
-            Complex64::default()
-        }
+        opt_i_bin.map_or_else(
+            || Ok(Complex64::default()),
+            |i_bin| {
+                Ok(Complex64::new(
+                    parameters[i_bin * 2],
+                    parameters[(i_bin * 2) + 1],
+                ))
+            },
+        )
     }
 
-    fn parameters(&self) -> Option<Vec<String>> {
-        Some(
-            (0..self.edges.len())
-                .flat_map(|i| vec![format!("bin {} re", i), format!("bin {} im", i)])
-                .collect(),
-        )
+    fn parameters(&self) -> Vec<String> {
+        (0..self.edges.len())
+            .flat_map(|i| vec![format!("bin {} re", i), format!("bin {} im", i)])
+            .collect()
     }
 }
 
 #[pyfunction(name = "PiecewiseM")]
-pub fn piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> Amplitude {
+pub fn py_piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> PyAmpOp {
     //! Creates a named [`Piecewise`] amplitude with the resonance mass as the binning variable.
-    Amplitude {
-        name: name.to_string(),
-        node: Arc::new(RwLock::new(Box::new(Piecewise::new(
-            bins,
-            range,
-            |e: &Event| (e.daughter_p4s[0] + e.daughter_p4s[1]).m(),
-        )))),
-    }
+    Amplitude::new(
+        name,
+        Box::new(Piecewise::new(bins, range, |e: &Event| {
+            (e.daughter_p4s[0] + e.daughter_p4s[1]).m()
+        })),
+    )
+    .into()
 }
 
 pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    m.add_class::<Amplitude>()?;
-    m.add_function(wrap_pyfunction!(scalar, m)?)?;
-    m.add_function(wrap_pyfunction!(cscalar, m)?)?;
-    m.add_function(wrap_pyfunction!(pcscalar, m)?)?;
-    m.add_function(wrap_pyfunction!(piecewise_m, m)?)?;
+    m.add_class::<PyAmpOp>()?;
+    m.add_class::<Parameter>()?;
+    m.add_class::<Model>()?;
+    m.add_function(wrap_pyfunction!(py_scalar, m)?)?;
+    m.add_function(wrap_pyfunction!(py_cscalar, m)?)?;
+    m.add_function(wrap_pyfunction!(py_pcscalar, m)?)?;
+    m.add_function(wrap_pyfunction!(py_piecewise_m, m)?)?;
     Ok(())
 }
