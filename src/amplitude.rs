@@ -818,22 +818,13 @@ impl Model {
                                               // amplitudes are deactivated
     }
     pub fn load(&mut self, dataset: &Dataset) {
-        println!("Loading Model");
         let mut next_cache_pos = 0;
         let mut parameter_index = 0;
         self.amplitudes.iter_mut().for_each(|amp| {
-            println!(
-                "Registering {} with cache {} and par_index {}",
-                amp.name, next_cache_pos, parameter_index
-            );
             amp.register(next_cache_pos, parameter_index, dataset)
                 .unwrap(); // unwrap panics if precalculate fails
             next_cache_pos += 1;
             parameter_index += amp.parameters().len();
-            println!(
-                "Cache position updated to {}\nParameter index updated to {}",
-                next_cache_pos, parameter_index
-            );
         });
     }
     fn group_by_index(&self) -> Vec<Vec<&Parameter>> {
