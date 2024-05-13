@@ -808,7 +808,6 @@ impl Model {
                 if amp.active {
                     let res = amp.calculate(&pars, event).unwrap(); // unwrap panics if any
                                                                     // errors occur in calculation
-                    println!("{} = {}", amp.name, res);
                     Some(res)
                 } else {
                     None
