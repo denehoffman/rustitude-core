@@ -441,12 +441,36 @@ impl AmpOp {
 
     pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
         match self {
-            Self::Amplitude(amp) => cache[amp.cache_position],
-            Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
-            Self::Product(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).product()),
-            Self::Real(op) => op.compute(cache).map(|r| r.re.into()),
-            Self::Imag(op) => op.compute(cache).map(|r| r.im.into()),
-            Self::NormSqr(op) => op.compute(cache).map(|r| r.norm_sqr().into()),
+            Self::Amplitude(amp) => {
+                let res = cache[amp.cache_position];
+                println!("{} {} - {}", amp.name, amp.cache_position, res.unwrap());
+                res
+            }
+            Self::Sum(ops) => {
+                let res = Some(ops.iter().filter_map(|op| op.compute(cache)).sum());
+                println!("---- sum ---- {:?}", res);
+                res
+            }
+            Self::Product(ops) => {
+                let res = Some(ops.iter().filter_map(|op| op.compute(cache)).product());
+                println!("---- product ---- {:?}", res);
+                res
+            }
+            Self::Real(op) => {
+                let res = op.compute(cache).map(|r| r.re.into());
+                println!("---- Real ---- {:?}", res);
+                res
+            }
+            Self::Imag(op) => {
+                let res = op.compute(cache).map(|r| r.im.into());
+                println!("---- Imag ---- {:?}", res);
+                res
+            }
+            Self::NormSqr(op) => {
+                let res = op.compute(cache).map(|r| r.norm_sqr().into());
+                println!("---- NormSq ---- {:?}", res);
+                res
+            }
         }
     }
 
