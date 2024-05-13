@@ -705,6 +705,7 @@ impl Model {
                 par.fixed_index = fixed_index;
             }
         }
+        self.reindex_parameters();
     }
     pub fn free(&mut self, amplitude: &str, parameter: &str) {
         let search_par = self.get_parameter(amplitude, parameter).unwrap();
@@ -715,6 +716,7 @@ impl Model {
                 par.fixed_index = None;
             }
         }
+        self.reindex_parameters();
     }
     pub fn set_bounds(&mut self, amplitude: &str, parameter: &str, bounds: (f64, f64)) {
         let search_par = self.get_parameter(amplitude, parameter).unwrap();
