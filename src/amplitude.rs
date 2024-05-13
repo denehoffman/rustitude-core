@@ -234,7 +234,9 @@ pub trait Node: Sync + Send {
     /// each [`Node`]. If this method returns [`None`], it is implied that the [`Node`] takes no
     /// parameters as input. Otherwise, the parameter names should be listed in the same order they
     /// are expected to be given as input to the [`Node::calculate`] method.
-    fn parameters(&self) -> Vec<String>;
+    fn parameters(&self) -> Vec<String> {
+        vec![]
+    }
 }
 
 #[pyclass]
