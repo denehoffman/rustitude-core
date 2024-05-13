@@ -444,9 +444,9 @@ impl AmpOp {
             Self::Amplitude(amp) => cache[amp.cache_position],
             Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
             Self::Product(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).product()),
-            Self::Real(op) => op.compute(cache),
-            Self::Imag(op) => op.compute(cache),
-            Self::NormSqr(op) => op.compute(cache),
+            Self::Real(op) => op.compute(cache).map(|r| r.re.into()),
+            Self::Imag(op) => op.compute(cache).map(|r| r.im.into()),
+            Self::NormSqr(op) => op.compute(cache).map(|r| r.norm_sqr().into()),
         }
     }
 
