@@ -239,7 +239,7 @@ pub trait Node: Sync + Send {
     }
 }
 
-#[pyclass]
+#[pyclass(name = "AmpOp")]
 #[derive(Clone)]
 pub struct PyAmpOp {
     pub op: AmpOp,
@@ -894,7 +894,7 @@ pub fn py_scalar(name: &str) -> PyAmpOp {
     //! parameter called `value`.
     //!
     //! See also: [`scalar`]
-    Amplitude::new(name, Box::new(Scalar)).into()
+    scalar(name).into()
 }
 pub fn scalar(name: &str) -> AmpOp {
     //! Creates a named [`Scalar`].
@@ -943,7 +943,7 @@ pub fn py_cscalar(name: &str) -> PyAmpOp {
     //! value determined by two parameters, `real` and `imag`.
     //!
     //! See also: [`cscalar`]
-    Amplitude::new(name, Box::new(ComplexScalar)).into()
+    cscalar(name).into()
 }
 pub fn cscalar(name: &str) -> AmpOp {
     //! Creates a named [`ComplexScalar`].
@@ -993,7 +993,7 @@ pub fn py_pcscalar(name: &str) -> PyAmpOp {
     //! value determined by two parameters, `real` and `imag`.
     //!
     //! See also: [`pcscalar`]
-    Amplitude::new(name, Box::new(PolarComplexScalar)).into()
+    pcscalar(name).into()
 }
 pub fn pcscalar(name: &str) -> AmpOp {
     //! Creates a named [`PolarComplexScalar`].
@@ -1081,8 +1081,7 @@ where
     }
 }
 
-#[pyfunction(name = "PiecewiseM")]
-pub fn py_piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> PyAmpOp {
+pub fn piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> AmpOp {
     //! Creates a named [`Piecewise`] amplitude with the resonance mass as the binning variable.
     Amplitude::new(
         name,
@@ -1090,7 +1089,11 @@ pub fn py_piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> PyAmpOp {
             (e.daughter_p4s[0] + e.daughter_p4s[1]).m()
         })),
     )
-    .into()
+}
+
+#[pyfunction(name = "PiecewiseM")]
+pub fn py_piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> PyAmpOp {
+    piecewise_m(name, bins, range).into()
 }
 
 pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
