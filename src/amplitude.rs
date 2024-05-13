@@ -828,8 +828,9 @@ impl Model {
                 .map(|val| format!("{:.3} + {:.3}i", val.unwrap().re, val.unwrap().im))
                 .join("  |  ")
         );
-        self.root.compute(&cache).unwrap().re // unwrap panics if all the
-                                              // amplitudes are deactivated
+        let res = self.root.compute(&cache).unwrap(); // unwrap panics if all the
+        println!("{} - result", res);
+        res.re
     }
     pub fn load(&mut self, dataset: &Dataset) {
         let mut next_cache_pos = 0;
