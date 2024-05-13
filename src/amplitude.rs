@@ -440,7 +440,6 @@ impl AmpOp {
     }
 
     pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
-        dbg!(self);
         match self {
             Self::Amplitude(amp) => cache[amp.cache_position],
             Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
@@ -815,6 +814,20 @@ impl Model {
                 }
             })
             .collect();
+        println!(
+            "{} - amplitudes",
+            self.amplitudes
+                .iter()
+                .map(|amp| amp.name.clone())
+                .join("  |  ")
+        );
+        println!(
+            "{} - cache",
+            cache
+                .iter()
+                .map(|val| format!("{:.3} + {:.3}i", val.unwrap().re, val.unwrap().im))
+                .join("  |  ")
+        );
         self.root.compute(&cache).unwrap().re // unwrap panics if all the
                                               // amplitudes are deactivated
     }
