@@ -820,17 +820,12 @@ impl Model {
     pub fn load(&mut self, dataset: &Dataset) {
         let mut next_cache_pos = 0;
         let mut parameter_index = 0;
-        let mut amp_names = HashSet::new();
-        self.root
-            .walk_mut()
-            .into_iter()
-            .filter(|amp| amp_names.insert(amp.name.clone()))
-            .for_each(|amp| {
-                amp.register(next_cache_pos, parameter_index, dataset)
-                    .unwrap(); // unwrap panics if precalculate fails
-                next_cache_pos += 1;
-                parameter_index += amp.parameters().len();
-            });
+        self.amplitudes.iter_mut().for_each(|amp| {
+            amp.register(next_cache_pos, parameter_index, dataset)
+                .unwrap(); // unwrap panics if precalculate fails
+            next_cache_pos += 1;
+            parameter_index += amp.parameters().len();
+        });
     }
     fn group_by_index(&self) -> Vec<Vec<&Parameter>> {
         self.parameters
