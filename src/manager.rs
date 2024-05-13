@@ -52,27 +52,25 @@ impl ExtendedLogLikelihood {
     }
     #[pyo3(name = "__call__")]
     #[allow(clippy::suboptimal_flops)]
-    pub fn evaluate(&self, parameters: Vec<f64>, num_threads: usize) -> f64 {
-        create_pool(num_threads).unwrap().install(|| {
-            let data_res = self.data_manager.evaluate(&parameters);
-            let data_weights = self.data_manager.dataset.weights();
-            let n_data = self.data_manager.dataset.len() as f64;
-            let mc_res = self.mc_manager.evaluate(&parameters);
-            let mc_weights = self.mc_manager.dataset.weights();
-            let n_mc = self.mc_manager.dataset.len() as f64;
-            let ln_l = (data_res
-                .iter()
-                .zip(data_weights)
-                .map(|(l, w)| w * l.ln())
-                .sum::<f64>())
-                - (n_data / n_mc)
-                    * (mc_res
-                        .iter()
-                        .zip(mc_weights)
-                        .map(|(l, w)| w * l)
-                        .sum::<f64>());
-            -2.0 * ln_l
-        })
+    pub fn evaluate(&self, parameters: Vec<f64>) -> f64 {
+        let data_res = self.data_manager.evaluate(&parameters);
+        let data_weights = self.data_manager.dataset.weights();
+        let n_data = self.data_manager.dataset.len() as f64;
+        let mc_res = self.mc_manager.evaluate(&parameters);
+        let mc_weights = self.mc_manager.dataset.weights();
+        let n_mc = self.mc_manager.dataset.len() as f64;
+        let ln_l = (data_res
+            .iter()
+            .zip(data_weights)
+            .map(|(l, w)| w * l.ln())
+            .sum::<f64>())
+            - (n_data / n_mc)
+                * (mc_res
+                    .iter()
+                    .zip(mc_weights)
+                    .map(|(l, w)| w * l)
+                    .sum::<f64>());
+        -2.0 * ln_l
     }
 }
 
