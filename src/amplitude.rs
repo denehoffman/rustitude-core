@@ -608,6 +608,18 @@ impl Node for Amplitude {
         self.node.write().precalculate(dataset)
     }
     fn calculate(&self, parameters: &[f64], event: &Event) -> Result<Complex64, NodeError> {
+        println!("Calculating from parameters:\n{:?}", parameters);
+        println!(
+            "Start: {}\tEnd: {}",
+            self.parameter_index_start,
+            self.parameter_index_start + self.parameters().len()
+        );
+        println!(
+            " = :\n{:?}",
+            parameters
+                [self.parameter_index_start..self.parameter_index_start + self.parameters().len()]
+                .to_owned()
+        );
         self.node.read().calculate(
             &parameters
                 [self.parameter_index_start..self.parameter_index_start + self.parameters().len()],
