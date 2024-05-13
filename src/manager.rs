@@ -62,7 +62,7 @@ impl ExtendedLogLikelihood {
         let ln_l = (data_res
             .iter()
             .zip(data_weights)
-            .map(|(l, w)| w * l.ln())
+            .map(|(l, w)| w * (l + f64::MIN_POSITIVE).ln())
             .sum::<f64>())
             - (n_data / n_mc)
                 * (mc_res
