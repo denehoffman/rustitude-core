@@ -886,7 +886,7 @@ impl Node for Scalar {
     }
 }
 
-#[pyfunction]
+#[pyfunction(name = "Scalar")]
 pub fn py_scalar(name: &str) -> PyAmpOp {
     //! Creates a named [`Scalar`].
     //!
@@ -935,7 +935,7 @@ impl Node for ComplexScalar {
     }
 }
 
-#[pyfunction]
+#[pyfunction(name = "CScalar")]
 pub fn py_cscalar(name: &str) -> PyAmpOp {
     //! Creates a named [`ComplexScalar`].
     //!
@@ -985,7 +985,7 @@ impl Node for PolarComplexScalar {
     }
 }
 
-#[pyfunction]
+#[pyfunction(name = "PCScalar")]
 pub fn py_pcscalar(name: &str) -> PyAmpOp {
     //! Creates a named [`PolarComplexScalar`].
     //!
