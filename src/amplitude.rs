@@ -377,7 +377,7 @@ impl AmpOp {
                 }
             }
             Self::Product(ops) => {
-                println!("[ - ]");
+                println!("[ * ]");
                 for (i, op) in ops.iter().enumerate() {
                     Self::_print_indent(&bits);
                     if i == ops.len() - 1 {
