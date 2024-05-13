@@ -16,12 +16,18 @@ use crate::dataset::{Dataset, Event};
 #[pyclass]
 #[derive(Clone)]
 pub struct Parameter {
+    #[pyo3(get)]
     pub amplitude: String,
+    #[pyo3(get)]
     pub name: String,
+    #[pyo3(get)]
     index: Option<usize>,
+    #[pyo3(get)]
     fixed_index: Option<usize>,
-    pub initial: f64,
-    pub bounds: (f64, f64),
+    #[pyo3(get)]
+    initial: f64,
+    #[pyo3(get)]
+    bounds: (f64, f64),
 }
 #[pymethods]
 impl Parameter {
