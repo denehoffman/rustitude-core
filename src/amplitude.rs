@@ -575,7 +575,7 @@ impl Display for Amplitude {
 }
 impl Amplitude {
     #[allow(clippy::new_ret_no_self)]
-    fn new(name: &str, node: Box<dyn Node>) -> AmpOp {
+    pub fn new(name: &str, node: Box<dyn Node>) -> AmpOp {
         AmpOp::Amplitude(Self {
             name: name.to_string(),
             node: Arc::new(RwLock::new(node)),
@@ -584,7 +584,7 @@ impl Amplitude {
             parameter_index_start: 0,
         })
     }
-    fn register(
+    pub fn register(
         &mut self,
         cache_position: usize,
         parameter_index_start: usize,
