@@ -440,6 +440,7 @@ impl AmpOp {
     }
 
     pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
+        println!("Computing???? {}", self);
         match self {
             Self::Amplitude(amp) => {
                 let res = cache[amp.cache_position];
