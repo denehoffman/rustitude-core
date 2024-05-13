@@ -440,6 +440,7 @@ impl AmpOp {
     }
 
     pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
+        dbg!(self);
         match self {
             Self::Amplitude(amp) => cache[amp.cache_position],
             Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
