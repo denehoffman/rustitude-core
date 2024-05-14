@@ -54,8 +54,8 @@ impl Event {
         format!("{}", self)
     }
     #[getter]
-    fn get_eps(&self) -> [f64; 3] {
-        [self.eps[0], self.eps[1], self.eps[2]]
+    fn get_eps(&self) -> PyResult<[f64; 3]> {
+        Ok([self.eps[0], self.eps[1], self.eps[2]])
     }
 }
 impl Event {

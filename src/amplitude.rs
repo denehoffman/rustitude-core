@@ -583,6 +583,15 @@ impl Display for Amplitude {
         }
     }
 }
+#[pymethods]
+impl Amplitude {
+    fn __str__(&self) -> String {
+        format!("{}", self)
+    }
+    fn __repr__(&self) -> String {
+        format!("{:?}", self)
+    }
+}
 impl Amplitude {
     #[allow(clippy::new_ret_no_self)]
     pub fn new(name: &str, node: Box<dyn Node>) -> AmpOp {
@@ -638,8 +647,8 @@ impl Model {
         Self::new(root.op)
     }
     #[getter]
-    fn get_root(&self) -> PyAmpOp {
-        self.root.clone().into()
+    fn get_root(&self) -> PyResult<PyAmpOp> {
+        Ok(self.root.clone().into())
     }
     pub fn get_parameter(&self, amplitude_name: &str, parameter_name: &str) -> Option<Parameter> {
         self.parameters
