@@ -353,9 +353,19 @@ impl AmpOp {
         match self {
             Self::Amplitude(amp) => {
                 if amp.parameters().len() > 7 {
-                    println!(" {}({},...)", amp.name, amp.parameters()[0..7].join(", "));
+                    println!(
+                        " {}{}({},...)",
+                        if amp.active { "!" } else { "" },
+                        amp.name,
+                        amp.parameters()[0..7].join(", ")
+                    );
                 } else {
-                    println!(" {}({})", amp.name, amp.parameters().join(", "));
+                    println!(
+                        " {}{}({})",
+                        if amp.active { "!" } else { "" },
+                        amp.name,
+                        amp.parameters().join(", ")
+                    );
                 }
             }
             Self::Sum(ops) => {
