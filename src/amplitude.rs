@@ -766,14 +766,18 @@ impl Model {
         }
     }
     pub fn get_bounds(&self) -> Vec<(f64, f64)> {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
         self.group_by_index()
             .iter()
+            .skip(any_fixed)
             .filter_map(|group| group.first().map(|par| par.bounds))
             .collect()
     }
     pub fn get_initial(&self) -> Vec<f64> {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
         self.group_by_index()
             .iter()
+            .skip(any_fixed)
             .filter_map(|group| group.first().map(|par| par.initial))
             .collect()
     }
