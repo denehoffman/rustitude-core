@@ -766,6 +766,20 @@ impl Model {
     pub fn get_n_free(&self) -> usize {
         self.get_min_free_index().unwrap_or(0)
     }
+    pub fn activate(&mut self, amplitude: &str) {
+        self.amplitudes.iter_mut().for_each(|amp| {
+            if amp.name == amplitude {
+                amp.active = true
+            }
+        })
+    }
+    pub fn deactivate(&mut self, amplitude: &str) {
+        self.amplitudes.iter_mut().for_each(|amp| {
+            if amp.name == amplitude {
+                amp.active = false
+            }
+        })
+    }
 }
 impl Model {
     fn new(root: AmpOp) -> Self {
