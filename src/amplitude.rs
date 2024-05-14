@@ -35,10 +35,7 @@ impl Parameter {
         format!("{}", self)
     }
     fn __repr__(&self) -> String {
-        format!(
-            "<Parameter: amplitude={}, name={}>",
-            self.amplitude, self.name
-        )
+        format!("{:?}", self)
     }
     #[new]
     pub fn new(amplitude: &str, name: &str, index: usize) -> Self {
@@ -58,13 +55,13 @@ impl Debug for Parameter {
         if self.index.is_none() {
             write!(
                 f,
-                "<{}>[ {} (*{}*) ]({:?})({:?})",
+                "< {} >[ {} (*{}*) ]({:?})({:?})",
                 self.amplitude, self.name, self.initial, self.index, self.fixed_index,
             )
         } else {
             write!(
                 f,
-                "<{}>[ {} ({}) ]({:?})({:?})",
+                "< {} >[ {} ({}) ]({:?})({:?})",
                 self.amplitude, self.name, self.initial, self.index, self.fixed_index,
             )
         }
@@ -377,7 +374,7 @@ impl AmpOp {
                 }
             }
             Self::Product(ops) => {
-                println!("[ - ]");
+                println!("[ * ]");
                 for (i, op) in ops.iter().enumerate() {
                     Self::_print_indent(&bits);
                     if i == ops.len() - 1 {
@@ -441,12 +438,30 @@ impl AmpOp {
 
     pub fn compute(&self, cache: &[Option<Complex64>]) -> Option<Complex64> {
         match self {
-            Self::Amplitude(amp) => cache[amp.cache_position],
-            Self::Sum(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).sum()),
-            Self::Product(ops) => Some(ops.iter().filter_map(|op| op.compute(cache)).product()),
-            Self::Real(op) => op.compute(cache),
-            Self::Imag(op) => op.compute(cache),
-            Self::NormSqr(op) => op.compute(cache),
+            Self::Amplitude(amp) => {
+                let res = cache[amp.cache_position];
+                res
+            }
+            Self::Sum(ops) => {
+                let res = Some(ops.iter().filter_map(|op| op.compute(cache)).sum());
+                res
+            }
+            Self::Product(ops) => {
+                let res = Some(ops.iter().filter_map(|op| op.compute(cache)).product());
+                res
+            }
+            Self::Real(op) => {
+                let res = op.compute(cache).map(|r| r.re.into());
+                res
+            }
+            Self::Imag(op) => {
+                let res = op.compute(cache).map(|r| r.im.into());
+                res
+            }
+            Self::NormSqr(op) => {
+                let res = op.compute(cache).map(|r| r.norm_sqr().into());
+                res
+            }
         }
     }
 
@@ -751,14 +766,18 @@ impl Model {
         }
     }
     pub fn get_bounds(&self) -> Vec<(f64, f64)> {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
         self.group_by_index()
             .iter()
+            .skip(any_fixed)
             .filter_map(|group| group.first().map(|par| par.bounds))
             .collect()
     }
     pub fn get_initial(&self) -> Vec<f64> {
+        let any_fixed = if self.any_fixed() { 1 } else { 0 };
         self.group_by_index()
             .iter()
+            .skip(any_fixed)
             .filter_map(|group| group.first().map(|par| par.initial))
             .collect()
     }
@@ -814,23 +833,24 @@ impl Model {
                 }
             })
             .collect();
-        self.root.compute(&cache).unwrap().re // unwrap panics if all the
-                                              // amplitudes are deactivated
+        let res = self.root.compute(&cache).unwrap(); // unwrap panics if all the
+        res.re
     }
     pub fn load(&mut self, dataset: &Dataset) {
         let mut next_cache_pos = 0;
         let mut parameter_index = 0;
-        let mut amp_names = HashSet::new();
-        self.root
-            .walk_mut()
-            .into_iter()
-            .filter(|amp| amp_names.insert(amp.name.clone()))
-            .for_each(|amp| {
-                amp.register(next_cache_pos, parameter_index, dataset)
-                    .unwrap(); // unwrap panics if precalculate fails
-                next_cache_pos += 1;
-                parameter_index += amp.parameters().len();
+        self.amplitudes.iter_mut().for_each(|amp| {
+            amp.register(next_cache_pos, parameter_index, dataset)
+                .unwrap(); // unwrap panics if precalculate fails
+            self.root.walk_mut().iter_mut().for_each(|r_amp| {
+                if r_amp.name == amp.name {
+                    r_amp.cache_position = next_cache_pos;
+                    r_amp.parameter_index_start = parameter_index;
+                }
             });
+            next_cache_pos += 1;
+            parameter_index += amp.parameters().len();
+        });
     }
     fn group_by_index(&self) -> Vec<Vec<&Parameter>> {
         self.parameters
