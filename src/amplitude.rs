@@ -489,8 +489,7 @@ impl Add for AmpOp {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        println!("Adding:\n\t{} + {}", self, rhs);
-        let res = match (self.clone(), rhs.clone()) {
+        match (self.clone(), rhs.clone()) {
             (Self::Sum(ops_l), Self::Sum(ops_r)) => Self::Sum([ops_l, ops_r].concat()),
             (Self::Sum(ops), _) => {
                 let mut sum_ops = ops;
@@ -503,9 +502,7 @@ impl Add for AmpOp {
                 Self::Sum(sum_ops)
             }
             (_, _) => Self::Sum(vec![self, rhs]),
-        };
-        println!("Result: {}", res);
-        res
+        }
     }
 }
 impl Add<AmpOp> for &AmpOp {
@@ -866,6 +863,12 @@ impl Model {
         self.amplitudes.iter_mut().for_each(|amp| {
             amp.register(next_cache_pos, parameter_index, dataset)
                 .unwrap(); // unwrap panics if precalculate fails
+            self.root.walk_mut().iter_mut().for_each(|r_amp| {
+                if r_amp.name == amp.name {
+                    r_amp.cache_position = next_cache_pos;
+                    r_amp.parameter_index_start = parameter_index;
+                }
+            });
             next_cache_pos += 1;
             parameter_index += amp.parameters().len();
         });
