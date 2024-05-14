@@ -547,16 +547,21 @@ impl Mul for &AmpOp {
 /// in an analysis, and makes each [`Node`]'s parameters unique.
 ///
 /// This is mostly used interally as an intermediate step to an [`AmpOp`].
+#[pyclass]
 #[derive(Clone)]
 pub struct Amplitude {
     /// A name which uniquely identifies an [`Amplitude`] within a sum and group.
+    #[pyo3(get)]
     pub name: String,
     /// A [`Node`] which contains all of the operations needed to compute a [`Complex64`] from an
     /// [`Event`] in a [`Dataset`], a [`Vec<f64>`] of parameter values, and possibly some
     /// precomputed values.
     pub node: Arc<RwLock<Box<dyn Node>>>,
+    #[pyo3(get)]
     pub active: bool,
+    #[pyo3(get)]
     pub cache_position: usize,
+    #[pyo3(get)]
     pub parameter_index_start: usize,
 }
 impl Debug for Amplitude {
@@ -619,9 +624,11 @@ impl Node for Amplitude {
 #[pyclass]
 #[derive(Debug, Clone)]
 pub struct Model {
-    root: AmpOp,
-    amplitudes: Vec<Amplitude>,
-    parameters: Vec<Parameter>,
+    pub root: AmpOp,
+    #[pyo3(get)]
+    pub amplitudes: Vec<Amplitude>,
+    #[pyo3(get)]
+    pub parameters: Vec<Parameter>,
 }
 
 #[pymethods]
@@ -630,14 +637,15 @@ impl Model {
     fn from_pyampop(root: PyAmpOp) -> Self {
         Self::new(root.op)
     }
+    #[getter]
+    fn get_root(&self) -> PyAmpOp {
+        self.root.clone().into()
+    }
     pub fn get_parameter(&self, amplitude_name: &str, parameter_name: &str) -> Option<Parameter> {
         self.parameters
             .iter()
             .find(|p: &&Parameter| p.amplitude == amplitude_name && p.name == parameter_name)
             .cloned()
-    }
-    pub fn get_parameters(&self) -> Vec<Parameter> {
-        self.parameters.clone()
     }
     pub fn print_parameters(&self) {
         let any_fixed = if self.any_fixed() { 1 } else { 0 };
@@ -1123,6 +1131,7 @@ pub fn py_piecewise_m(name: &str, bins: usize, range: (f64, f64)) -> PyAmpOp {
 pub fn pyo3_module(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyAmpOp>()?;
     m.add_class::<Parameter>()?;
+    m.add_class::<Amplitude>()?;
     m.add_class::<Model>()?;
     m.add_function(wrap_pyfunction!(py_scalar, m)?)?;
     m.add_function(wrap_pyfunction!(py_cscalar, m)?)?;
