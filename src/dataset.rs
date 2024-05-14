@@ -17,10 +17,15 @@ use crate::prelude::FourMomentum;
 #[pyclass]
 #[derive(Debug, Default, Clone)]
 pub struct Event {
+    #[pyo3(get)]
     pub index: usize,
+    #[pyo3(get)]
     pub weight: f64,
+    #[pyo3(get)]
     pub beam_p4: FourMomentum,
+    #[pyo3(get)]
     pub recoil_p4: FourMomentum,
+    #[pyo3(get)]
     pub daughter_p4s: Vec<FourMomentum>,
     pub eps: Vector3<f64>,
 }
@@ -47,6 +52,10 @@ impl Display for Event {
 impl Event {
     pub fn __str__(&self) -> String {
         format!("{}", self)
+    }
+    #[getter]
+    fn get_eps(&self) -> [f64; 3] {
+        [self.eps[0], self.eps[1], self.eps[2]]
     }
 }
 impl Event {
@@ -365,6 +374,9 @@ pub struct Dataset {
 
 #[pymethods]
 impl Dataset {
+    pub fn events(&self) -> Vec<Event> {
+        self.events.read().clone()
+    }
     pub fn __len__(&self) -> PyResult<usize> {
         Ok(self.len())
     }
@@ -410,6 +422,13 @@ impl Dataset {
             (p1_p4 + p2_p4).m()
         };
         self.clone().split(mass, range, bins) // TODO: fix clone here eventually
+    }
+
+    #[staticmethod]
+    pub fn from_events(events: Vec<Event>) -> PyResult<Self> {
+        Ok(Self {
+            events: Arc::new(RwLock::new(events)),
+        })
     }
 
     #[staticmethod]
