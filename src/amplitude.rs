@@ -35,10 +35,7 @@ impl Parameter {
         format!("{}", self)
     }
     fn __repr__(&self) -> String {
-        format!(
-            "<Parameter: amplitude={}, name={}>",
-            self.amplitude, self.name
-        )
+        format!("{:?}", self)
     }
     #[new]
     pub fn new(amplitude: &str, name: &str, index: usize) -> Self {
@@ -58,13 +55,13 @@ impl Debug for Parameter {
         if self.index.is_none() {
             write!(
                 f,
-                "<{}>[ {} (*{}*) ]({:?})({:?})",
+                "< {} >[ {} (*{}*) ]({:?})({:?})",
                 self.amplitude, self.name, self.initial, self.index, self.fixed_index,
             )
         } else {
             write!(
                 f,
-                "<{}>[ {} ({}) ]({:?})({:?})",
+                "< {} >[ {} ({}) ]({:?})({:?})",
                 self.amplitude, self.name, self.initial, self.index, self.fixed_index,
             )
         }
