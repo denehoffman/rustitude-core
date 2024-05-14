@@ -489,7 +489,8 @@ impl Add for AmpOp {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
-        match (self.clone(), rhs.clone()) {
+        println!("Adding:\n\t{} + {}", self, rhs);
+        let res = match (self.clone(), rhs.clone()) {
             (Self::Sum(ops_l), Self::Sum(ops_r)) => Self::Sum([ops_l, ops_r].concat()),
             (Self::Sum(ops), _) => {
                 let mut sum_ops = ops;
@@ -502,7 +503,9 @@ impl Add for AmpOp {
                 Self::Sum(sum_ops)
             }
             (_, _) => Self::Sum(vec![self, rhs]),
-        }
+        };
+        println!("Result: {}", res);
+        res
     }
 }
 impl Add<AmpOp> for &AmpOp {
